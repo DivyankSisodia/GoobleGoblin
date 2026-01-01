@@ -1,4 +1,4 @@
-package com.example.gooble_goblin
+package com.dev.gooble_goblin
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

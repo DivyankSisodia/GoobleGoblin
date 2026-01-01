@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:gooble_goblin/features/experiment/exp1.dart' show NotificationService;
 import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
 import 'package:local_auth_darwin/local_auth_darwin.dart';
@@ -44,6 +45,26 @@ class _HomeScreenState extends State<HomeScreen> {
           ElevatedButton(onPressed: getavailableBiometrics, child: const Text('Check Biometrics')),
           SizedBox(height: 20),
           ElevatedButton(onPressed: authenticate, child: const Text('Authenticate')),
+          SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: () async {
+              // Test immediate notification first
+              // await NotificationService.instance.showImmediateNotification(
+              //   id: 1,
+              //   title: 'Test Immediate',
+              //   body: 'If you see this, notifications work!',
+              // );
+
+              // Then schedule one
+              final scheduleTime = DateTime.now().add(const Duration(seconds: 10));
+              print('Scheduling for: $scheduleTime');
+
+              await NotificationService.instance.scheduleNotification(id: 1, title: 'Hello 👋', body: 'This is a scheduled notification', scheduledDate: scheduleTime);
+
+              print('Notification scheduled');
+            },
+            child: const Text('Test Notifications'),
+          ),
         ],
       ),
     );

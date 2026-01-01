@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:gooble_goblin/features/experiment/exp1.dart';
 import 'package:gooble_goblin/features/home/home_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.instance.init();
   runApp(const StackedCardsApp());
 }
 
