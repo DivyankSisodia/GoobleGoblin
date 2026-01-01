@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../auth/auth_gaurd.dart';
 import '../home/home_screen.dart';
 
 class AnimatedSplashScreen extends StatefulWidget {
@@ -37,7 +38,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          MaterialPageRoute(builder: (_) => const AuthScreen()),
         );
       }
     });

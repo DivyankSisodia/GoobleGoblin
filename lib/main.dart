@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:gooble_goblin/features/auth/auth_gaurd.dart';
 import 'package:gooble_goblin/features/experiment/exp1.dart';
-import 'package:gooble_goblin/features/home/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,7 +29,7 @@ class _StackedCardsAppState extends State<StackedCardsApp> {
           elevation: 0,
         ),
       ),
-      home: const HomeScreen(),
+      home: AuthScreen(),
     );
   }
 }
