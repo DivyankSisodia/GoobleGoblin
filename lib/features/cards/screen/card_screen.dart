@@ -40,6 +40,32 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
           onPressed: () => Navigator.pop(context),
           icon: const Icon(CupertinoIcons.back, color: Colors.white),
         ),
+        actions: [
+          InkWell(
+            onTap: () {
+              if (selectedTabIndex == 0) {
+                AppBottomSheet.showManageCardsBottomSheet(context, ref, 'Debit');
+              }
+            },
+            child: Container(
+              margin: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.primaryNeonDark,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.primaryNeonDark.withOpacity(0.7), width: 1, style: BorderStyle.solid),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.edit, color: AppColors.surface),
+                  Gap(6),
+                  Text('Edit', style: TextStyle(color: AppColors.surface, fontSize: 16, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily)),
+                ],
+              ),
+            ),
+          ),
+          
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),

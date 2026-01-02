@@ -38,18 +38,37 @@ class CardPreviewWidget extends ConsumerWidget {
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: isSelected 
-              ? AppColors.primaryNeon 
+              ? (isCredit ? const Color.fromARGB(255, 133, 80, 231) : AppColors.primaryNeon)
               : Colors.white.withOpacity(0.1),
             width: isSelected ? 2 : 1,
           ),
           boxShadow: [
-            BoxShadow(
-              color: isSelected 
-                ? AppColors.primaryNeon.withOpacity(0.3)
-                : Colors.black.withOpacity(0.4),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            )
+            if (isSelected && isCredit) ...[
+              BoxShadow(
+                color: const Color(0xFF2D1B4E).withOpacity(0.8),
+                blurRadius: 30,
+                spreadRadius: 2,
+                offset: const Offset(0, 10),
+              ),
+              BoxShadow(
+                color: const Color(0xFF2D1B4E).withOpacity(0.4),
+                blurRadius: 20,
+                spreadRadius: 0,
+                offset: const Offset(0, 5),
+              ),
+            ] else if (isSelected) ...[
+              BoxShadow(
+                color: AppColors.primaryNeon.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ] else ...[
+              BoxShadow(
+                color: Colors.black.withOpacity(0.4),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ],
         ),
         child: Column(
