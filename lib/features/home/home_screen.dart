@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:gooble_goblin/core/colors.dart';
 import 'package:gooble_goblin/core/models/card.dart';
@@ -8,20 +9,20 @@ import 'package:gooble_goblin/features/home/widget/custom_tab_widget.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gooble_goblin/features/cards/widget/card_preview_widget.dart';
 import 'package:gooble_goblin/features/home/widget/custom_segmented_tab_bar.dart';
-import '../../core/DB/db_helper.dart';
+import 'provider/cards_provider.dart';
 import 'widget/monthly_budget_widget.dart';
 import 'widget/total_balance_widget.dart';
 import 'widget/upcoming_payment_widget.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   final bool isFirstTime;
   const HomeScreen({super.key, this.isFirstTime = false});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
@@ -82,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 notifi.scheduleNotification(
                   title: 'Notification',
                   body: 'This is a notification',
-                  id:1,
+                  id: 1,
                   scheduledDate: DateTime.now().add(const Duration(seconds: 10)),
                 );
               },
@@ -98,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onPressed: () {
           _showAddCardBottomSheet(context);
         },
-        child: const Icon(Icons.add, color: Colors.black, size: 32,),
+        child: const Icon(Icons.add, color: Colors.black, size: 32),
       ),
       floatingActionButtonAnimator: FloatingActionButtonAnimator.scaling,
       // Matching AppColors.background
@@ -240,9 +241,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     height: 56,
                     child: ElevatedButton(
                       onPressed: () async {
-                        final newCard = BankCard(bankName: bankNameController.text.trim(), balance: double.parse(amountController.text.trim()), date: DateTime.now().toString(), type: selectedTabIndex == 1 ? 'Credit' : 'Debit');
-                        // save to db
-                        await DatabaseHelper.instance.insertCard(newCard);
+                        final newCard = BankCard(bankName: bankNameController.text.trim(), balance: double.tryParse(amountController.text.trim()) ?? 0.0, date: DateTime.now().toString(), type: selectedTabIndex == 1 ? 'Credit' : 'Debit');
+                        // save to db and update state
+                        await ref.read(cardsProvider.notifier).addCard(newCard);
                         Navigator.pop(context);
                       },
                       style: ElevatedButton.styleFrom(

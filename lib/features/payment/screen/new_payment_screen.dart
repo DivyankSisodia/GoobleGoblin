@@ -15,6 +15,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../cards/widget/card_preview_widget.dart';
 import '../widgets/frequency_dropdown.dart';
 import '../widgets/reoccuring_payment_widget.dart';
+import '../../category/provider/category_provider.dart';
 
 class NewPaymentScreen extends ConsumerStatefulWidget {
   const NewPaymentScreen({super.key});
@@ -28,23 +29,13 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
   @override
   void initState() {
     super.initState();
-    // Add some dummy cards for demonstration
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final cardsNotifier = ref.read(cardsProvider.notifier);
-      if (ref.read(cardsProvider).isEmpty) {
-        cardsNotifier.addCard(CardModel(id: '1', bankName: 'Axis Bank', balance: '10000', isCredit: false));
-        cardsNotifier.addCard(CardModel(id: '2', bankName: 'HDFC Bank', balance: '25000', isCredit: true));
-        cardsNotifier.addCard(CardModel(id: '3', bankName: 'ICICI Bank', balance: '15000', isCredit: false));
-        cardsNotifier.addCard(CardModel(id: '4', bankName: 'SBI Bank', balance: '30000', isCredit: true));
-        cardsNotifier.addCard(CardModel(id: '5', bankName: 'Kotak Bank', balance: '20000', isCredit: false));
-      }
-    });
   }
 
   @override
   Widget build(BuildContext context) {
     final cards = ref.watch(cardsProvider);
     final cardsNotifier = ref.read(cardsProvider.notifier);
+    final categories = ref.watch(categoryProvider);
 
     bool isSelected = false;
 
@@ -92,7 +83,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                         final card = cards[index];
                         return CardPreviewWidget(
                           bankName: card.bankName,
-                          balance: card.balance,
+                          balance: card.balance.toString(),
                           isCredit: card.isCredit,
                           isSelected: card.isSelected,
                           onTap: () {
@@ -130,9 +121,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                 runSpacing: 12,
                 alignment: WrapAlignment.start,
                 children: [
-                  CategoryChip(iconPath: AppImages.bagShopping, label: 'Shopping', isSVG: true),
-                  CategoryChip(iconPath: AppImages.bike, label: 'Bike', isSVG: true),
-                  CategoryChip(iconPath: AppImages.bagShopping, label: 'Entertainment', isSVG: true),
+                  ...categories.map((cat) => CategoryChip(iconPath: AppImages.bagShopping, label: cat.label, isSVG: true)),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
@@ -140,7 +129,6 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: AppColors.primaryNeonDark, width: 2),
                     ),
-              
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [

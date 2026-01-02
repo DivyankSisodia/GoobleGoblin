@@ -10,10 +10,10 @@ import 'core/DB/db_helper.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await NotificationService.instance.init();
-  
-  // Initialize Database and sqflite_live on startup
+
+  // Initialize Database on startup
   await DatabaseHelper.instance.database;
-  
+
   runApp(const ProviderScope(child: StackedCardsApp()));
 }
 

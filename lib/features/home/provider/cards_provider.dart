@@ -1,45 +1,24 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/DB/db_helper.dart';
+import '../../../core/models/card.dart';
 
-class CardModel {
-  final String id;
-  final String bankName;
-  final String balance;
-  final bool isCredit;
-  final bool isSelected;
-
-  CardModel({
-    required this.id,
-    required this.bankName,
-    required this.balance,
-    required this.isCredit,
-    this.isSelected = false,
-  });
-
-  CardModel copyWith({
-    String? id,
-    String? bankName,
-    String? balance,
-    bool? isCredit,
-    bool? isSelected,
-  }) {
-    return CardModel(
-      id: id ?? this.id,
-      bankName: bankName ?? this.bankName,
-      balance: balance ?? this.balance,
-      isCredit: isCredit ?? this.isCredit,
-      isSelected: isSelected ?? this.isSelected,
-    );
-  }
-}
-
-class CardsNotifier extends StateNotifier<List<CardModel>> {
-  CardsNotifier() : super([]);
-
-  void addCard(CardModel card) {
-    state = [...state, card];
+class CardsNotifier extends StateNotifier<List<BankCard>> {
+  CardsNotifier() : super([]) {
+    loadCards();
   }
 
-  void toggleCardSelection(String cardId) {
+  Future<void> loadCards() async {
+    final cards = await DatabaseHelper.instance.getAllCards();
+    state = cards;
+  }
+
+  Future<void> addCard(BankCard card) async {
+    await DatabaseHelper.instance.insertCard(card);
+    await loadCards();
+  }
+
+  void toggleCardSelection(int? cardId) {
+    if (cardId == null) return;
     state = state.map((card) {
       if (card.id == cardId) {
         return card.copyWith(isSelected: !card.isSelected);
@@ -48,13 +27,14 @@ class CardsNotifier extends StateNotifier<List<CardModel>> {
     }).toList();
   }
 
-  void selectCard(String cardId) {
+  void selectCard(int? cardId) {
+    if (cardId == null) return;
     state = state.map((card) {
       return card.copyWith(isSelected: card.id == cardId);
     }).toList();
   }
 
-  CardModel? get selectedCard {
+  BankCard? get selectedCard {
     try {
       return state.firstWhere((card) => card.isSelected);
     } catch (e) {
@@ -63,6 +43,6 @@ class CardsNotifier extends StateNotifier<List<CardModel>> {
   }
 }
 
-final cardsProvider = StateNotifierProvider<CardsNotifier, List<CardModel>>((ref) {
+final cardsProvider = StateNotifierProvider<CardsNotifier, List<BankCard>>((ref) {
   return CardsNotifier();
 });

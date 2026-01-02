@@ -1,23 +1,29 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart' show GoogleFonts;
 
 import '../../../core/colors.dart';
 import '../../home/widget/custom_segmented_tab_bar.dart';
+import '../widget/card_preview_widget.dart';
+import '../../home/provider/cards_provider.dart';
 
-class CardsScreen extends StatefulWidget {
+class CardsScreen extends ConsumerStatefulWidget {
   const CardsScreen({super.key});
 
   @override
-  State<CardsScreen> createState() => _CardsScreenState();
+  ConsumerState<CardsScreen> createState() => _CardsScreenState();
 }
 
-class _CardsScreenState extends State<CardsScreen> {
+class _CardsScreenState extends ConsumerState<CardsScreen> {
   int selectedTabIndex = 0;
 
   @override
   Widget build(BuildContext context) {
+    final cards = ref.watch(cardsProvider);
+    final filteredCards = cards.where((card) => card.isCredit == (selectedTabIndex == 1)).toList();
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -60,6 +66,28 @@ class _CardsScreenState extends State<CardsScreen> {
                 },
                 backgroundColor: AppColors.surfaceLight.withOpacity(0.1),
               ),
+            ),
+            Gap(24),
+            Expanded(
+              child: filteredCards.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No cards found',
+                        style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 16),
+                      ),
+                    )
+                  : ListView.separated(
+                      itemCount: filteredCards.length,
+                      separatorBuilder: (context, index) => Gap(16),
+                      itemBuilder: (context, index) {
+                        final card = filteredCards[index];
+                        return CardPreviewWidget(
+                          bankName: card.bankName,
+                          balance: card.balance.toString(),
+                          isCredit: card.isCredit,
+                        );
+                      },
+                    ),
             ),
           ],
         ),
