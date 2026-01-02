@@ -46,6 +46,12 @@ class CardsNotifier extends StateNotifier<List<BankCard>> {
     await DatabaseHelper.instance.updateCard(card);
     await loadCards();
   }
+
+  Future<void> deleteCard(int? cardId) async {
+    if (cardId == null) return;
+    await DatabaseHelper.instance.deleteCard(cardId);
+    await loadCards();
+  }
 }
 
 final cardsProvider = StateNotifierProvider<CardsNotifier, List<BankCard>>((ref) {

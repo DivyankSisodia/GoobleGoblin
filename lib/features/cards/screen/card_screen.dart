@@ -43,9 +43,8 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
         actions: [
           InkWell(
             onTap: () {
-              if (selectedTabIndex == 0) {
-                AppBottomSheet.showManageCardsBottomSheet(context, ref, 'Debit');
-              }
+              final cardType = selectedTabIndex == 0 ? 'Debit' : 'Credit';
+              AppBottomSheet.showManageCardsBottomSheet(context, ref, cardType);
             },
             child: Container(
               margin: const EdgeInsets.only(right: 16),

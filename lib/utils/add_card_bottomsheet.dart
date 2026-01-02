@@ -252,6 +252,79 @@ class AppBottomSheet {
                             ),
                           ],
                         ),
+                        const Gap(16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              if (selectedCard != null) {
+                                // Show confirmation dialog
+                                final shouldDelete = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    backgroundColor: const Color(0xFF1E1B29),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                    title: Text(
+                                      'Delete Card',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontFamily: GoogleFonts.montserrat().fontFamily,
+                                      ),
+                                    ),
+                                    content: Text(
+                                      'Are you sure you want to delete ${selectedCard!.bankName}? This action cannot be undone.',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontFamily: GoogleFonts.montserrat().fontFamily,
+                                      ),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context, false),
+                                        child: Text(
+                                          'Cancel',
+                                          style: TextStyle(
+                                            color: Colors.white70,
+                                            fontFamily: GoogleFonts.montserrat().fontFamily,
+                                          ),
+                                        ),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () => Navigator.pop(context, true),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.red,
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        ),
+                                        child: Text(
+                                          'Delete',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontFamily: GoogleFonts.montserrat().fontFamily,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (shouldDelete == true) {
+                                  await ref.read(cardsProvider.notifier).deleteCard(selectedCard!.id);
+                                  Navigator.pop(context);
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.delete_outline, size: 20),
+                            label: const Text('Delete Card', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              side: const BorderSide(color: Colors.red),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                          ),
+                        ),
                       ],
                     ],
                   ),

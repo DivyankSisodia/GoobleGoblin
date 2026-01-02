@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,8 +12,10 @@ import 'package:gooble_goblin/features/payment/widgets/amount_widget.dart';
 import 'package:gooble_goblin/features/payment/widgets/custom_chip_widget.dart';
 import 'package:gooble_goblin/features/payment/widgets/custom_date_widget.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
 import '../../cards/widget/card_preview_widget.dart';
+import '../../experiment/exp1.dart';
 import '../widgets/frequency_dropdown.dart';
 import '../widgets/reoccuring_payment_widget.dart';
 import '../../category/provider/category_provider.dart';
@@ -25,6 +29,67 @@ class NewPaymentScreen extends ConsumerStatefulWidget {
 
 class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
   DateTime _selectedDate = DateTime.now();
+  bool _isReminderEnabled = false;
+  DateTime _reminderDateTime = DateTime.now().add(const Duration(days: 1));
+
+  void _showDateTimePicker() {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (_) => Container(
+        height: 350,
+        decoration: const BoxDecoration(
+          color: Color(0xFF1E1B29),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.1))),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Set Reminder',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      decoration: TextDecoration.none,
+                      fontFamily: GoogleFonts.montserrat().fontFamily,
+                    ),
+                  ),
+                  CupertinoButton(
+                    child: Text(
+                      'Done',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontFamily: GoogleFonts.montserrat().fontFamily,
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.dateAndTime,
+                initialDateTime: _reminderDateTime,
+                onDateTimeChanged: (dateTime) {
+                  setState(() {
+                    _reminderDateTime = dateTime;
+                  });
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
   @override
   void initState() {
     super.initState();
@@ -36,7 +101,6 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
     final cardsNotifier = ref.read(cardsProvider.notifier);
     final categories = ref.watch(categoryProvider);
 
-    bool isSelected = false;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -194,20 +258,70 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                           Gap(20),
                           // FrequencyDropdown(),
                           Switch(
-                            value: isSelected,
+                            value: _isReminderEnabled,
                             activeColor: Colors.white,
                             activeTrackColor: const Color(0xFFE040FB),
                             inactiveThumbColor: Colors.grey,
                             inactiveTrackColor: Colors.black26,
                             onChanged: (bool value) {
                               setState(() {
-                                isSelected = value;
+                                _isReminderEnabled = value;
                               });
                             },
                           ),
                         ],
                       ),
                     ),
+                    if (_isReminderEnabled) ...[
+                      Gap(16),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: InkWell(
+                          onTap: _showDateTimePicker,
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.white.withOpacity(0.1)),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(CupertinoIcons.time, color: AppColors.primaryNeon, size: 20),
+                                Gap(12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Reminder Date & Time',
+                                        style: TextStyle(
+                                          color: Colors.white.withOpacity(0.5),
+                                          fontSize: 12,
+                                          fontFamily: GoogleFonts.montserrat().fontFamily,
+                                        ),
+                                      ),
+                                      Gap(4),
+                                      Text(
+                                        DateFormat('MMM dd, yyyy - hh:mm a').format(_reminderDateTime),
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          fontFamily: GoogleFonts.montserrat().fontFamily,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(CupertinoIcons.chevron_right, color: Colors.white.withOpacity(0.3), size: 16),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     Gap(16),
                   ],
                 ),
@@ -220,7 +334,16 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                 splashColor: AppColors.textPrimary.withOpacity(0.2),
                 highlightColor: AppColors.textPrimary.withOpacity(0.2),
                 onTap: () {
-                  HapticFeedback.lightImpact();
+                  HapticFeedback.mediumImpact();
+                  // TODO: add scheduled notification
+                  final NotificationService notificationService = NotificationService.instance;
+                  notificationService.scheduleNotification(
+                    id: Random().nextInt(1000),
+                    title: 'Payment Reminder',
+                    body: 'Don\'t forget to pay your bill!',
+                    scheduledDate: _reminderDateTime,
+                  );
+                  // TODO: Implement save action
                   // Handle save action
                   print('Transaction Saved!');
                 },
