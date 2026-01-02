@@ -8,6 +8,9 @@ import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
 import 'package:local_auth_darwin/local_auth_darwin.dart';
 
+import 'widget/circular_progress_widget.dart';
+import 'widget/total_balance_widget.dart';
+
 class HomeScreen extends StatefulWidget {
   final bool isFirstTime;
   const HomeScreen({super.key, this.isFirstTime = false});
@@ -89,71 +92,54 @@ class _HomeScreenState extends State<HomeScreen> {
             margin: const EdgeInsets.symmetric(horizontal: 16),
             width: double.infinity,
             decoration: BoxDecoration(color: AppColors.surfaceLight.withOpacity(0.8), borderRadius: BorderRadius.circular(16)),
+            child: TotalBalanceWidget(),
+          ),
+          Gap(20),
+          Container(
+            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            width: double.infinity,
+            decoration: BoxDecoration(color: AppColors.surfaceLight.withOpacity(0.8), borderRadius: BorderRadius.circular(16)),
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(left: 24.0, right: 16.0, top: 16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Total Balance',
-                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w400, fontFamily: GoogleFonts.montserrat().fontFamily),
-                      ),
-                      IconButton(
-                        onPressed: () {},
-                        icon: Icon(CupertinoIcons.eye_slash, color: Colors.white, size: 24),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 24.0),
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: Text(
-                      '₹ 66,660',
-                      style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Monthly Budget',
+                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w400, fontFamily: GoogleFonts.montserrat().fontFamily),
+                        ),
+                        Gap(16),
+                        Text(
+                          '₹ 66,660',
+                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
+                        ),
+                        Text(
+                          '₹ 66,660',
+                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-                Gap(16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.primaryNeonDark),
-                          borderRadius: BorderRadius.circular(16),
-                          color: Colors.transparent
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.trending_up, color: AppColors.primaryNeonDark, size: 14),
-                            Gap(8),
-                            Text(
-                              '+450\$ (3.2%)',
-                              style: TextStyle(
-                                color: AppColors.primaryNeonDark,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                fontFamily: GoogleFonts.montserrat().fontFamily,
-                              ),
-                            ),
-                          ],
-                        ),
+                    Gap(20),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      // decoration: BoxDecoration(color: AppColors.primaryNeon, borderRadius: BorderRadius.circular(16)),
+                      child: CircularPercentWidget(
+                        currentValue: 45645.4,
+                        totalValue: 66666.66,
+                        progressColor: Colors.green,
+                        size: 70,
                       ),
-                      Gap(16),
-                      Text(
-                        'vs Last Month',
-                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                Gap(16),
               ],
             ),
           ),
