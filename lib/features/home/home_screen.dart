@@ -2,11 +2,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:gooble_goblin/core/colors.dart';
+import 'package:gooble_goblin/core/models/card.dart';
 import 'package:gooble_goblin/features/experiment/exp1.dart';
 import 'package:gooble_goblin/features/home/widget/custom_tab_widget.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:gooble_goblin/features/home/widget/card_preview_widget.dart';
+import 'package:gooble_goblin/features/cards/widget/card_preview_widget.dart';
 import 'package:gooble_goblin/features/home/widget/custom_segmented_tab_bar.dart';
+import '../../core/DB/db_helper.dart';
 import 'widget/monthly_budget_widget.dart';
 import 'widget/total_balance_widget.dart';
 import 'widget/upcoming_payment_widget.dart';
@@ -155,63 +157,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showWelcomeBottomSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          decoration: const BoxDecoration(
-            color: Color(0xFF1E1B29),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
-              ),
-              const SizedBox(height: 32),
-              const Icon(Icons.celebration_rounded, size: 64, color: Color(0xFFB0FF38)),
-              const SizedBox(height: 24),
-              const Text(
-                'Welcome, Master!',
-                style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'We are glad to have you back. Explore your new dashboard and manage your tasks efficiently.',
-                style: TextStyle(color: Colors.white70, fontSize: 16),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFB0FF38),
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    elevation: 0,
-                  ),
-                  child: const Text('Get Started', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   void _showAddCardBottomSheet(BuildContext context) {
     int selectedTabIndex = 0;
     final TextEditingController bankNameController = TextEditingController();
@@ -294,7 +239,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () async {
+                        final newCard = BankCard(bankName: bankNameController.text.trim(), balance: double.parse(amountController.text.trim()), date: DateTime.now().toString(), type: selectedTabIndex == 1 ? 'Credit' : 'Debit');
+                        // save to db
+                        await DatabaseHelper.instance.insertCard(newCard);
+                        Navigator.pop(context);
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryNeon,
                         foregroundColor: Colors.black,

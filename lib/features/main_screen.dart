@@ -2,6 +2,7 @@ import 'package:curved_navigation_bar/curved_navigation_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gooble_goblin/core/colors.dart';
+import 'package:gooble_goblin/features/cards/screen/card_screen.dart';
 import 'package:gooble_goblin/features/home/home_screen.dart';
 import 'package:gooble_goblin/features/payment/screen/new_payment_screen.dart';
 
@@ -17,7 +18,7 @@ class MainScreen extends ConsumerWidget {
 
     final List<Widget> screens = [
       HomeScreen(isFirstTime: isFirstTime),
-      const PlaceholderScreen(title: 'Cards'),
+      CardsScreen(),
       const NewPaymentScreen(),
       const PlaceholderScreen(title: 'History'),
       const PlaceholderScreen(title: 'Settings'),

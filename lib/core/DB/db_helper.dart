@@ -1,6 +1,7 @@
 import 'package:gooble_goblin/core/models/category.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_live/sqflite_live.dart';
 
 import '../models/card.dart';
 import '../models/payment.dart';
@@ -22,17 +23,29 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(
+    final db = await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
       onConfigure: (db) async => await db.execute('PRAGMA foreign_keys = ON'),
+      onUpgrade: _onUpgrade,
     );
+    
+    // Initialize sqflite_live on the opened database
+    db.live(port: 8080, enabled: true, level: Level.all);
+    
+    return db;
+  }
+
+  Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE cards ADD COLUMN type TEXT'); 
+    }
   }
 
   Future _createDB(Database db, int version) async {
     await db.execute('''CREATE TABLE categories (id INTEGER PRIMARY KEY AUTOINCREMENT, label TEXT, icon TEXT)''');
-    await db.execute('''CREATE TABLE cards (id INTEGER PRIMARY KEY AUTOINCREMENT, bankName TEXT, balance REAL, date TEXT)''');
+    await db.execute('''CREATE TABLE cards (id INTEGER PRIMARY KEY AUTOINCREMENT, bankName TEXT, balance REAL, date TEXT, type TEXT)''');
     await db.execute('''CREATE TABLE payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         amount REAL,

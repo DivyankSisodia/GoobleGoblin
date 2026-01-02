@@ -504,6 +504,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.16.0"
+  mime:
+    dependency: transitive
+    description:
+      name: mime
+      sha256: "41a20518f0cb1256669420fdba0cd90d21561e560ac240f26ef8322e45bb7ed6"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.0"
   model_viewer_plus:
     dependency: "direct main"
     description:
@@ -725,6 +733,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.4.2"
+  sqflite_live:
+    dependency: "direct main"
+    description:
+      name: sqflite_live
+      sha256: c787a531728ebd5b76880a67bc638d29ff215babd8c04836af59c618ec6f9898
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.2"
   sqflite_platform_interface:
     dependency: transitive
     description:

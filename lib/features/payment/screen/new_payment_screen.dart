@@ -12,7 +12,7 @@ import 'package:gooble_goblin/features/payment/widgets/custom_chip_widget.dart';
 import 'package:gooble_goblin/features/payment/widgets/custom_date_widget.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../home/widget/card_preview_widget.dart';
+import '../../cards/widget/card_preview_widget.dart';
 import '../widgets/frequency_dropdown.dart';
 import '../widgets/reoccuring_payment_widget.dart';
 

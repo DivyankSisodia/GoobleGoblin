@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:gooble_goblin/features/auth/auth_gaurd.dart';
 import 'package:gooble_goblin/features/experiment/exp1.dart';
 import 'package:gooble_goblin/features/main_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:toastification/toastification.dart';
 
+import 'core/DB/db_helper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await NotificationService.instance.init();
+  
+  // Initialize Database and sqflite_live on startup
+  await DatabaseHelper.instance.database;
+  
   runApp(const ProviderScope(child: StackedCardsApp()));
 }
 

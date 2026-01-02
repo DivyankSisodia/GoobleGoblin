@@ -30,6 +30,7 @@ dependencies:
   timezone: ^0.10.1
   toastification: ^3.0.3
   path: ^1.9.1
+  sqflite_live: ^1.0.2
 
 dev_dependencies:
   flutter_test:
