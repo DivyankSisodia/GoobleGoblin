@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gooble_goblin/core/colors.dart';
 import 'package:gooble_goblin/features/home/home_screen.dart';
+import 'package:gooble_goblin/features/payment/screen/new_payment_screen.dart';
 
 final navigationIndexProvider = StateProvider<int>((ref) => 0);
 
@@ -17,7 +18,7 @@ class MainScreen extends ConsumerWidget {
     final List<Widget> screens = [
       HomeScreen(isFirstTime: isFirstTime),
       const PlaceholderScreen(title: 'Cards'),
-      const PlaceholderScreen(title: 'New Payment'),
+      const NewPaymentScreen(),
       const PlaceholderScreen(title: 'History'),
       const PlaceholderScreen(title: 'Settings'),
     ];

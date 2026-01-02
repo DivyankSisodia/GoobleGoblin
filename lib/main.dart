@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gooble_goblin/features/auth/auth_gaurd.dart';
 import 'package:gooble_goblin/features/experiment/exp1.dart';
+import 'package:gooble_goblin/features/main_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:toastification/toastification.dart';
 
-import 'features/home/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -62,7 +62,7 @@ class _StackedCardsAppState extends State<StackedCardsApp> {
             elevation: 0,
           ),
         ),
-        home: const AuthScreen(),
+        home: const MainScreen(),
       ),
     );
   }

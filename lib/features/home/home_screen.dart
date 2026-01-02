@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:gooble_goblin/core/colors.dart';
+import 'package:gooble_goblin/features/experiment/exp1.dart';
 import 'package:gooble_goblin/features/home/widget/custom_tab_widget.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gooble_goblin/features/home/widget/card_preview_widget.dart';
@@ -74,7 +75,15 @@ class _HomeScreenState extends State<HomeScreen> {
             width: 42,
             decoration: const BoxDecoration(color: AppColors.primaryNeon, shape: BoxShape.circle),
             child: IconButton(
-              onPressed: () {},
+              onPressed: () {
+                NotificationService notifi = NotificationService.instance;
+                notifi.scheduleNotification(
+                  title: 'Notification',
+                  body: 'This is a notification',
+                  id:1,
+                  scheduledDate: DateTime.now().add(const Duration(seconds: 10)),
+                );
+              },
               icon: Icon(CupertinoIcons.person, color: Colors.black, size: 24),
             ),
           ),
