@@ -29,6 +29,7 @@ dependencies:
   syncfusion_flutter_chat: ^32.1.21
   timezone: ^0.10.1
   toastification: ^3.0.3
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:
