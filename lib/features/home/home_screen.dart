@@ -1,15 +1,21 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/svg.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:gap/gap.dart';
+import 'package:gooble_goblin/core/app_images.dart';
 import 'package:gooble_goblin/core/colors.dart';
 import 'package:gooble_goblin/features/experiment/exp1.dart' show NotificationService;
+import 'package:gooble_goblin/features/home/widget/custom_tab_widget.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
 import 'package:local_auth_darwin/local_auth_darwin.dart';
 
 import 'widget/circular_progress_widget.dart';
+import 'widget/monthly_budget_widget.dart';
 import 'widget/total_balance_widget.dart';
+import 'widget/upcoming_payment_widget.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool isFirstTime;
@@ -100,49 +106,37 @@ class _HomeScreenState extends State<HomeScreen> {
             margin: const EdgeInsets.symmetric(horizontal: 16),
             width: double.infinity,
             decoration: BoxDecoration(color: AppColors.surfaceLight.withOpacity(0.8), borderRadius: BorderRadius.circular(16)),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: MonthlyBudgetWidget(),
+          ),
+          Gap(24),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Monthly Budget',
-                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w400, fontFamily: GoogleFonts.montserrat().fontFamily),
-                        ),
-                        Gap(16),
-                        Text(
-                          '₹ 66,660',
-                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
-                        ),
-                        Text(
-                          '₹ 66,660',
-                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
-                        ),
-                      ],
-                    ),
-                    Gap(20),
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      // decoration: BoxDecoration(color: AppColors.primaryNeon, borderRadius: BorderRadius.circular(16)),
-                      child: CircularPercentWidget(
-                        currentValue: 45645.4,
-                        totalValue: 66666.66,
-                        progressColor: Colors.green,
-                        size: 70,
-                      ),
-                    ),
-                  ],
+                Text(
+                  'Upcoming Payments',
+                  style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
+                ),
+                Text(
+                  'See All',
+                  style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
                 ),
               ],
             ),
           ),
+          Gap(16),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: List.generate(
+                5,
+                (index) => const UpcomingPaymentWidget(),
+              ),
+            ),
+          ),
+          const Gap(32),
+          const CustomTabWidget(),
         ],
       ),
     );
@@ -205,3 +199,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+

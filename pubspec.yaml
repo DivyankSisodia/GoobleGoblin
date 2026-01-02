@@ -13,7 +13,9 @@ dependencies:
     sdk: flutter
   flutter_3d_controller: ^2.3.0
   flutter_local_notifications: ^19.5.0
+  flutter_svg: ^2.2.3
   flutter_timezone: ^5.0.1
+  font_awesome_flutter: ^10.12.0
   gap: ^3.0.1
   google_fonts: ^6.3.3
   local_auth: ^3.0.0
@@ -37,6 +39,7 @@ flutter:
   assets:
     - assets/3d_model/
     - assets/app_icon/
+    - assets/images/
 
 flutter_native_splash:
   color: "#000000"  # Dark background to match animation
