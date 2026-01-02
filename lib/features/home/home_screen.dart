@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:gooble_goblin/features/experiment/exp1.dart' show NotificationService;
@@ -7,104 +6,131 @@ import 'package:local_auth_android/local_auth_android.dart';
 import 'package:local_auth_darwin/local_auth_darwin.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final bool isFirstTime;
+  const HomeScreen({super.key, this.isFirstTime = false});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late final LocalAuthentication auth;
-  bool _supportState = false;
+  
 
   @override
   void initState() {
     super.initState();
-    auth = LocalAuthentication();
-    auth.isDeviceSupported().then(
-      (value) => setState(() {
-        _supportState = value;
-      }),
-    );
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
+    if (!widget.isFirstTime) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) {
+            _showWelcomeBottomSheet(context);
+          }
+        });
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(_supportState ? 'Biometric supported' : 'No biometric support'),
-          SizedBox(height: 20),
-          ElevatedButton(onPressed: getavailableBiometrics, child: const Text('Check Biometrics')),
-          SizedBox(height: 20),
-          ElevatedButton(onPressed: authenticate, child: const Text('Authenticate')),
-          SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () async {
-              // Test immediate notification first
-              // await NotificationService.instance.showImmediateNotification(
-              //   id: 1,
-              //   title: 'Test Immediate',
-              //   body: 'If you see this, notifications work!',
-              // );
-
-              // Then schedule one
-              final scheduleTime = DateTime.now().add(const Duration(seconds: 10));
-              print('Scheduling for: $scheduleTime');
-
-              await NotificationService.instance.scheduleNotification(id: 1, title: 'Hello 👋', body: 'This is a scheduled notification', scheduledDate: scheduleTime);
-
-              print('Notification scheduled');
-            },
-            child: const Text('Test Notifications'),
-          ),
-        ],
+      backgroundColor: const Color(0xFF0D0B14), // Matching AppColors.background
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const Icon(Icons.home_rounded, size: 80, color: Color(0xFFB0FF38)),
+            const SizedBox(height: 20),
+            const Text(
+              "Welcome to Gooble Goblin",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Future<void> authenticate() async {
-    try {
-      final bool didAuthenticate = await auth.authenticate(
-        localizedReason: 'Please authenticate to show account balance',
-        authMessages: const <AuthMessages>[
-          AndroidAuthMessages(signInTitle: 'Oops! Biometric authentication required!', cancelButton: 'No thanks'),
-          IOSAuthMessages(cancelButton: 'No thanks'),
-        ],
-      );
-      print("didAuthenticate: $didAuthenticate");
-      // ···
-    } on LocalAuthException catch (e) {
-      print("LocalAuthException: $e");
-      if (e.code == LocalAuthExceptionCode.noBiometricHardware) {
-        print("LocalAuthException: noBiometricHardware");
-        // Add handling of no hardware here.
-      } else if (e.code == LocalAuthExceptionCode.temporaryLockout || e.code == LocalAuthExceptionCode.biometricLockout) {
-        print("LocalAuthException: temporaryLockout or biometricLockout");
-        // ...
-      } else {
-        print("LocalAuthException: unknown");
-        // ...
-      }
-    }
-  }
-
-  Future<void> getavailableBiometrics() async {
-    final List<BiometricType> availableBiometrics = await auth.getAvailableBiometrics();
-
-    print("availableBiometrics list: $availableBiometrics");
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {});
+  void _showWelcomeBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: Color(0xFF1E1B29),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 32),
+              const Icon(
+                Icons.celebration_rounded,
+                size: 64,
+                color: Color(0xFFB0FF38),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Welcome, Master!',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'We are glad to have you back. Explore your new dashboard and manage your tasks efficiently.',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 16,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFB0FF38),
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Get Started',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

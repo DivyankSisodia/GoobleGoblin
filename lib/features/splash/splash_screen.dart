@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../auth/auth_gaurd.dart';
-import '../home/home_screen.dart';
 
 class AnimatedSplashScreen extends StatefulWidget {
   const AnimatedSplashScreen({super.key});
