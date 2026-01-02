@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:gooble_goblin/core/colors.dart';
-import 'package:gooble_goblin/features/home/home_screen.dart';
+import 'package:gooble_goblin/features/main_screen.dart';
 import 'package:gooble_goblin/utils/toast_notification.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:local_auth/local_auth.dart';
@@ -66,7 +66,7 @@ class _AuthScreenState extends State<AuthScreen> {
       }
       
       AppToasts.showSuccessToast(context);
-      Navigator.push(context, MaterialPageRoute(builder: (context) => HomeScreen(isFirstTime: isFirstTime)));
+      Navigator.push(context, MaterialPageRoute(builder: (context) => MainScreen(isFirstTime: isFirstTime)));
     } on LocalAuthException catch (e) {
       print("LocalAuthException: $e");
       if (e.code == LocalAuthExceptionCode.noBiometricHardware) {

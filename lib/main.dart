@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gooble_goblin/features/auth/auth_gaurd.dart';
 import 'package:gooble_goblin/features/experiment/exp1.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,7 +10,7 @@ import 'features/home/home_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await NotificationService.instance.init();
-  runApp(const StackedCardsApp());
+  runApp(const ProviderScope(child: StackedCardsApp()));
 }
 
 class StackedCardsApp extends StatefulWidget {
