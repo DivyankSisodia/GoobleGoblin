@@ -1,18 +1,11 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/svg.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:gap/gap.dart';
-import 'package:gooble_goblin/core/app_images.dart';
 import 'package:gooble_goblin/core/colors.dart';
-import 'package:gooble_goblin/features/experiment/exp1.dart' show NotificationService;
 import 'package:gooble_goblin/features/home/widget/custom_tab_widget.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:local_auth/local_auth.dart';
-import 'package:local_auth_android/local_auth_android.dart';
-import 'package:local_auth_darwin/local_auth_darwin.dart';
-
-import 'widget/circular_progress_widget.dart';
+import 'package:gooble_goblin/features/home/widget/card_preview_widget.dart';
+import 'package:gooble_goblin/features/home/widget/custom_segmented_tab_bar.dart';
 import 'widget/monthly_budget_widget.dart';
 import 'widget/total_balance_widget.dart';
 import 'widget/upcoming_payment_widget.dart';
@@ -33,7 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted) {
-            _showWelcomeBottomSheet(context);
+            _showAddCardBottomSheet(context);
           }
         });
       });
@@ -88,56 +81,67 @@ class _HomeScreenState extends State<HomeScreen> {
           Gap(20),
         ],
       ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: AppColors.primaryNeon,
+        shape: const CircleBorder(),
+        onPressed: () {
+          _showAddCardBottomSheet(context);
+        },
+        child: const Icon(Icons.add, color: Colors.black, size: 32,),
+      ),
+      floatingActionButtonAnimator: FloatingActionButtonAnimator.scaling,
       // Matching AppColors.background
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Gap(30),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            width: double.infinity,
-            decoration: BoxDecoration(color: AppColors.surfaceLight.withOpacity(0.8), borderRadius: BorderRadius.circular(16)),
-            child: TotalBalanceWidget(),
-          ),
-          Gap(20),
-          Container(
-            padding: const EdgeInsets.all(16),
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            width: double.infinity,
-            decoration: BoxDecoration(color: AppColors.surfaceLight.withOpacity(0.8), borderRadius: BorderRadius.circular(16)),
-            child: MonthlyBudgetWidget(),
-          ),
-          Gap(24),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Upcoming Payments',
-                  style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
-                ),
-                Text(
-                  'See All',
-                  style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
-                ),
-              ],
+      body: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Gap(30),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              width: double.infinity,
+              decoration: BoxDecoration(color: AppColors.surfaceLight.withOpacity(0.8), borderRadius: BorderRadius.circular(16)),
+              child: TotalBalanceWidget(),
             ),
-          ),
-          Gap(16),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: List.generate(
-                5,
-                (index) => const UpcomingPaymentWidget(),
+            Gap(20),
+            Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              width: double.infinity,
+              decoration: BoxDecoration(color: AppColors.surfaceLight.withOpacity(0.8), borderRadius: BorderRadius.circular(16)),
+              child: MonthlyBudgetWidget(),
+            ),
+            Gap(24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Upcoming Payments',
+                    style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
+                  ),
+                  Text(
+                    'See All',
+                    style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
+                  ),
+                ],
               ),
             ),
-          ),
-          const Gap(32),
-          const CustomTabWidget(),
-        ],
+            Gap(16),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: List.generate(
+                  5,
+                  (index) => const UpcomingPaymentWidget(),
+                ),
+              ),
+            ),
+            const Gap(32),
+            const CustomTabWidget(),
+          ],
+        ),
       ),
     );
   }
@@ -196,6 +200,135 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       },
+    );
+  }
+
+  void _showAddCardBottomSheet(BuildContext context) {
+    int selectedTabIndex = 0;
+    final TextEditingController bankNameController = TextEditingController();
+    final TextEditingController amountController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Container(
+              padding: EdgeInsets.only(
+                left: 24,
+                right: 24,
+                top: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+              ),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1E1B29),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                  ),
+                  const Gap(24),
+                  Text(
+                    'Add New Card',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: GoogleFonts.montserrat().fontFamily,
+                    ),
+                  ),
+                  const Gap(24),
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(color: AppColors.surfaceLight.withOpacity(0.5), borderRadius: BorderRadius.circular(30)),
+                    child: CustomSegmentedTabBar(
+                      tabs: const ['Debit Card', 'Credit Card'],
+                      selectedIndex: selectedTabIndex,
+                      onChanged: (index) {
+                        setState(() {
+                          selectedTabIndex = index;
+                        });
+                      },
+                      backgroundColor: AppColors.surfaceLight.withOpacity(0.1),
+                    ),
+                  ),
+                  const Gap(24),
+                  CardPreviewWidget(
+                    bankName: bankNameController.text,
+                    balance: amountController.text,
+                    isCredit: selectedTabIndex == 1,
+                  ),
+                  const Gap(24),
+                  _buildBottomSheetTextField(
+                    controller: bankNameController,
+                    hint: 'Bank Name',
+                    icon: Icons.account_balance_rounded,
+                    onChanged: (val) => setState(() {}),
+                  ),
+                  const Gap(16),
+                  _buildBottomSheetTextField(
+                    controller: amountController,
+                    hint: 'Current Bank Amount',
+                    icon: Icons.currency_rupee_rounded,
+                    keyboardType: TextInputType.number,
+                    onChanged: (val) => setState(() {}),
+                  ),
+                  const Gap(32),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryNeon,
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 0,
+                      ),
+                      child: const Text('Add Card', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildBottomSheetTextField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    Function(String)? onChanged,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      onChanged: onChanged,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+        prefixIcon: Icon(icon, color: AppColors.primaryNeon),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.05),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: AppColors.primaryNeon.withOpacity(0.5)),
+        ),
+      ),
     );
   }
 }

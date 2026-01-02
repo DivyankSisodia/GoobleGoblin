@@ -26,7 +26,7 @@ class AppColors {
   // --- Gradients ---
   // Use this for the Floating Action Button or highlighted Tabs
   static const LinearGradient neonGradient = LinearGradient(
-    colors: [primaryNeon, primaryNeonDark],
+    colors: [Color.fromARGB(255, 157, 252, 14), Color.fromARGB(255, 97, 167, 0)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );

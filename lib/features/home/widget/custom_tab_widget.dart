@@ -1,5 +1,27 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter_svg/svg.dart';
+import 'package:gap/gap.dart';
+import 'package:gooble_goblin/core/app_images.dart';
+import 'package:gooble_goblin/core/colors.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import 'custom_segmented_tab_bar.dart';
+
+class TransactionItem {
+  final String title;
+  final String date;
+  final String amount;
+  final String icon;
+  final Color iconColor;
+
+  TransactionItem({
+    required this.title,
+    required this.date,
+    required this.amount,
+    required this.icon,
+    required this.iconColor,
+  });
+}
 
 class CustomTabWidget extends StatefulWidget {
   const CustomTabWidget({super.key});
@@ -11,6 +33,26 @@ class CustomTabWidget extends StatefulWidget {
 class _CustomTabWidgetState extends State<CustomTabWidget> {
   final List<String> tabs = ['Transactions', 'Cards', 'Categories'];
   int selectedIndex = 0;
+
+  final Map<int, List<TransactionItem>> tabContent = {
+    0: [
+      TransactionItem(title: 'Netflix', date: '02 Jan 2024', amount: '- ₹ 1,499', icon: AppImages.netflix, iconColor: const Color(0xFFE50914)),
+      TransactionItem(title: 'Zomato', date: '01 Jan 2024', amount: '- ₹ 450', icon: AppImages.zomato, iconColor: const Color(0xFFCB202D)),
+      TransactionItem(title: 'Swiggy', date: '31 Dec 2023', amount: '- ₹ 320', icon: AppImages.swiggy, iconColor: const Color(0xFFFF5200)),
+      TransactionItem(title: 'Youtube', date: '30 Dec 2023', amount: '- ₹ 129', icon: AppImages.youtube, iconColor: const Color(0xFFFF0000)),
+    ],
+    1: [
+      TransactionItem(title: 'HDFC Bank Tap', date: 'Primary Card', amount: '₹ 45,000', icon: AppImages.mobile, iconColor: AppColors.primaryNeon),
+      TransactionItem(title: 'ICICI Amazon Pay', date: 'Shopping Card', amount: '₹ 12,500', icon: AppImages.bagShopping, iconColor: Colors.orange),
+    ],
+    2: [
+      TransactionItem(title: 'Food & Drinks', date: '12 Transactions', amount: '₹ 8,420', icon: AppImages.zomato, iconColor: AppColors.primaryNeon),
+      TransactionItem(title: 'Entertainment', date: '5 Transactions', amount: '₹ 2,100', icon: AppImages.youtube, iconColor: Colors.purpleAccent),
+      TransactionItem(title: 'Shopping', date: '8 Transactions', amount: '₹ 15,300', icon: AppImages.bagShopping, iconColor: Colors.blueAccent),
+      TransactionItem(title: 'Travel', date: '4 Transactions', amount: '₹ 4,500', icon: AppImages.bike, iconColor: Colors.greenAccent),
+    ],
+  };
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -22,73 +64,78 @@ class _CustomTabWidgetState extends State<CustomTabWidget> {
             setState(() => selectedIndex = index);
           },
         ),
-        const SizedBox(height: 40),
-
-        /// Example content switching
-        Text("Selected: ${tabs[selectedIndex]}", style: const TextStyle(fontSize: 22)),
-      ],
-    );
-  }
-}
-
-class CustomSegmentedTabBar extends StatelessWidget {
-  final List<String> tabs;
-  final int selectedIndex;
-  final ValueChanged<int> onChanged;
-
-  const CustomSegmentedTabBar({super.key, required this.tabs, required this.selectedIndex, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 56,
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(color: const Color(0xFF3A1D4E), borderRadius: BorderRadius.circular(30)),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final tabWidth = constraints.maxWidth / tabs.length;
-
-          return Stack(
-            children: [
-              /// Animated active tab
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-                left: selectedIndex * tabWidth,
-                child: Container(
-                  width: tabWidth,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [Color(0xFFFF4FD8), Color(0xFFB83DFF)]),
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [BoxShadow(color: Colors.pinkAccent.withOpacity(0.6), blurRadius: 12, spreadRadius: 1)],
-                  ),
-                ),
+        const Gap(24),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: tabContent[selectedIndex]?.length ?? 0,
+          separatorBuilder: (context, index) => const Gap(12),
+          itemBuilder: (context, index) {
+            final item = tabContent[selectedIndex]![index];
+            return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceLight.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white.withOpacity(0.05)),
               ),
-
-              /// Tabs
-              Row(
-                children: List.generate(tabs.length, (index) {
-                  final isSelected = index == selectedIndex;
-
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () => onChanged(index),
-                      child: Center(
-                        child: Text(
-                          tabs[index],
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : Colors.white70),
-                        ),
-                      ),
+              child: Row(
+                children: [
+                  Container(
+                    height: 48,
+                    width: 48,
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      shape: BoxShape.circle,
                     ),
-                  );
-                }),
+                    padding: const EdgeInsets.all(10),
+                    child: SvgPicture.asset(
+                      item.icon,
+                      colorFilter: ColorFilter.mode(item.iconColor, BlendMode.srcIn),
+                    ),
+                  ),
+                  const Gap(16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: GoogleFonts.montserrat().fontFamily,
+                          ),
+                        ),
+                        Text(
+                          item.date,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.5),
+                            fontSize: 12,
+                            fontFamily: GoogleFonts.montserrat().fontFamily,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    item.amount,
+                    style: TextStyle(
+                      color: item.amount.startsWith('-') ? Colors.white : AppColors.primaryNeon,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: GoogleFonts.montserrat().fontFamily,
+                    ),
+                  ),
+                ],
               ),
-            ],
-          );
-        },
-      ),
+            );
+          },
+        ),
+        const Gap(20),
+      ],
     );
   }
 }
