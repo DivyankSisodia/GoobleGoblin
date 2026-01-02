@@ -29,4 +29,15 @@ class Payment {
     'frequency': frequency,
     'reminderNotification': reminderNotification ? 1 : 0,
   };
+
+  factory Payment.fromMap(Map<String, dynamic> map) => Payment(
+    id: map['id'],
+    amount: map['amount'],
+    date: map['date'],
+    cardId: map['cardId'],
+    categoryId: map['categoryId'],
+    isRecurring: map['isRecurring'] == 1,
+    frequency: map['frequency'],
+    reminderNotification: map['reminderNotification'] == 1,
+  );
 }
