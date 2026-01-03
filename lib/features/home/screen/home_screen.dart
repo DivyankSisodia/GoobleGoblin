@@ -1,11 +1,14 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fpdart/fpdart.dart';
 import 'package:gap/gap.dart';
 import 'package:gooble_goblin/core/colors.dart';
 import 'package:gooble_goblin/features/home/widget/custom_tab_widget.dart';
 import 'package:gooble_goblin/utils/add_card_bottomsheet.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/models/category.dart';
+import '../../../core/models/payment.dart';
 import '../../category/provider/category_provider.dart';
 import '../../payment/provider/transcation_provider.dart';
 import '../widget/monthly_budget_widget.dart';
@@ -46,12 +49,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await Future.wait<void>([ref.read(transactionProvider.notifier).fetchPayments(), ref.read(categoryProvider.notifier).loadCategories()]);
+      await Future.wait([ref.read(transactionProvider.notifier).fetchPayments(), ref.read(categoryProvider.notifier).loadCategories()]);
 
       final payments = ref.read(transactionProvider);
       final categories = ref.read(categoryProvider);
-      print(payments);
-      print(categories);
+
+      debugPrint(payments.toString());
+      debugPrint(categories.toString());
     });
   }
 

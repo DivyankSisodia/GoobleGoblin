@@ -12,4 +12,9 @@ class Category {
     label: map['label'],
     icon: map['icon'],
   );
+  
+  @override
+  String toString() {
+    return 'Category(id: $id, label: $label, icon: $icon)';
+  }
 }

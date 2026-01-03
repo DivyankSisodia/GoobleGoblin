@@ -184,7 +184,12 @@ class DatabaseHelper {
 
   Future<List<Payment>> getAllPayments() async {
     final db = await instance.database;
-    final result = await db.query('payments');
+    final result = await db.rawQuery('''
+      SELECT p.*, c.label as category_label, c.icon as category_icon
+      FROM payments p
+      LEFT JOIN categories c ON p.categoryId = c.id
+      ORDER BY p.date DESC
+    ''');
     return result.map((json) => Payment.fromMap(json)).toList();
   }
 
@@ -339,13 +344,14 @@ class DatabaseHelper {
     );
   }
 
-  Future<List<Payment>> getPaymentByCategory(String category) async {
+  Future<List<Payment>> getPaymentByCategory(String categoryLabel) async {
     final db = await instance.database;
-    final result = await db.query(
-      'payments',
-      where: 'category = ?',
-      whereArgs: [category],
-    );
+    final result = await db.rawQuery('''
+      SELECT p.*, c.label as category_label, c.icon as category_icon
+      FROM payments p
+      INNER JOIN categories c ON p.categoryId = c.id
+      WHERE c.label = ?
+    ''', [categoryLabel]);
     return result.map((json) => Payment.fromMap(json)).toList();
   }
 

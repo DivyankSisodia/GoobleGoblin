@@ -118,8 +118,6 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
     );
   }
 
-  // ---------------- CATEGORIES ----------------
-
   Widget _categoriesTab(
     List<Category> categories,
     List<Payment> payments,
@@ -254,3 +252,4 @@ final _subtitleStyle = TextStyle(
   fontSize: 12,
   fontFamily: GoogleFonts.montserrat().fontFamily,
 );
+

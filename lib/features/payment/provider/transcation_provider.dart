@@ -8,10 +8,11 @@ class TransactionNotifier extends StateNotifier<List<Payment>> {
     fetchPayments();
   }
 
-  Future<void> fetchPayments() async {
+  Future<List<Payment>> fetchPayments() async {
     // TODO: implement fetch payments
     final transcations = await DatabaseHelper.instance.getAllPayments();
     state = transcations;
+    return transcations;
   }
 
   Future<void> addPayment(Payment payment) async {
