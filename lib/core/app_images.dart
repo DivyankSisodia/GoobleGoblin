@@ -10,4 +10,6 @@ class AppImages {
   static const String cash = 'assets/images/cash.png';
   static const String food = 'assets/images/food.png';
   static const String utils = 'assets/images/utils.png';
+  static const String debitCard = 'assets/images/debit_card.png';
+  static const String creditCard = 'assets/images/credit_card.png';
 }

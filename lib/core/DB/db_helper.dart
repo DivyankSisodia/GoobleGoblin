@@ -355,6 +355,17 @@ class DatabaseHelper {
     return result.map((json) => Payment.fromMap(json)).toList();
   }
 
+  Future<List<Payment>> getRecurringPayment() async {
+    final db = await instance.database;
+    final result = await db.rawQuery('''
+      SELECT p.*, c.label as category_label, c.icon as category_icon
+      FROM payments p
+      LEFT JOIN categories c ON p.categoryId = c.id
+      WHERE p.isRecurring = ?
+    ''', [1]);
+    return result.map((json) => Payment.fromMap(json)).toList();
+  }
+  
   // ===== Expenditure Tracking =====
   
   /// Update daily expenditure aggregates for a specific card and date

@@ -34,8 +34,25 @@ class TransactionNotifier extends StateNotifier<List<Payment>> {
     final payment = await DatabaseHelper.instance.getPaymentByCategory(category);
     return payment;
   }
+
+  Future<void> refreshList() async {
+    await fetchPayments();
+  }
+
+  Future<List<Payment>> getRecurringPayment() async {
+    final payment = await DatabaseHelper.instance.getRecurringPayment();
+    return payment;
+  }
 }
 
 final transactionProvider = StateNotifierProvider<TransactionNotifier, List<Payment>>((ref) {
   return TransactionNotifier();
+});
+
+final recurringPaymentsProvider = FutureProvider<List<Payment>>((ref) async {
+  // Watch transactionProvider to automatically refresh when payments change
+  final allPayments = ref.watch(transactionProvider);
+  
+  // Return only recurring payments from the current state
+  return allPayments.where((p) => p.isRecurring).toList();
 });

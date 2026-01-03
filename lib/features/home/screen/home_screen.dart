@@ -163,13 +163,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ],
               ),
             ),
-            Gap(16),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(children: List.generate(5, (index) => const UpcomingPaymentWidget())),
-            ),
+            const Gap(16),
+            ref
+                .watch(recurringPaymentsProvider)
+                .when(
+                  data: (payments) {
+                    if (payments.isEmpty) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text("No upcoming payments", style: TextStyle(color: Colors.white.withOpacity(0.5))),
+                      );
+                    }
+                    // For debugging, print as JSON once
+                    debugPrint('Upcoming Payments Loaded: ${payments.length}');
+                    for (var p in payments) {
+                      print(p.toMap());
+                    }
+
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(children: payments.map((p) => UpcomingPaymentWidget(payment: p)).toList()),
+                    );
+                  },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (e, s) => Center(child: Text('Error: $e')),
+                ),
             const Gap(32),
-            const CustomTabWidget(),
+            CustomTabWidget(),
+            Gap(24),
           ],
         ),
       ),

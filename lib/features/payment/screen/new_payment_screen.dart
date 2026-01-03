@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
-import 'package:gooble_goblin/core/DB/db_helper.dart';
 import 'package:gooble_goblin/core/app_images.dart';
 import 'package:gooble_goblin/core/colors.dart';
 import 'package:gooble_goblin/core/models/payment.dart';
@@ -21,6 +20,7 @@ import '../widgets/reoccuring_payment_widget.dart';
 import '../../category/provider/category_provider.dart';
 
 import 'package:gooble_goblin/core/models/category.dart';
+import '../provider/transcation_provider.dart';
 
 class NewPaymentScreen extends ConsumerStatefulWidget {
   const NewPaymentScreen({super.key});
@@ -468,7 +468,14 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                   HapticFeedback.mediumImpact();
 
                   final amount = double.tryParse(_amountController.text) ?? 0.0;
-                  final selectedCard = ref.read(cardsProvider).firstWhere((c) => c.isSelected, orElse: () => ref.read(cardsProvider).first);
+                  final cards = ref.read(cardsProvider);
+                  
+                  if (cards.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please add a payment method first')));
+                    return;
+                  }
+
+                  final selectedCard = cards.firstWhere((c) => c.isSelected, orElse: () => cards.first);
 
                   if (amount <= 0) {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a valid amount')));
@@ -482,8 +489,8 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                   final payment = Payment(amount: amount, date: DateFormat('yyyy-MM-dd').format(_selectedDate), cardId: selectedCard.id ?? 0, categoryId: _selectedCategoryId ?? 0, isRecurring: _isRecurring, frequency: _isRecurring ? _selectedFrequency : null, reminderNotification: _isReminderEnabled, note: descriptionController.text.trim());
 
                   try {
-                    await DatabaseHelper.instance.insertPayment(payment);
-                    print('Transaction Saved to DB: ${payment.toMap()}');
+                    await ref.read(transactionProvider.notifier).addPayment(payment);
+                    print('Transaction Saved to DB and Provider updated: ${payment.toMap()}');
 
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment saved successfully!')));

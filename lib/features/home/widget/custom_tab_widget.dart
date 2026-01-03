@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/app_images.dart';
 import '../../../core/colors.dart';
 import '../../../core/models/card.dart';
 import '../../../core/models/category.dart';
@@ -31,17 +32,9 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
 
     return Column(
       children: [
-        CustomSegmentedTabBar(
-          tabs: tabs,
-          selectedIndex: selectedIndex,
-          onChanged: (index) => setState(() => selectedIndex = index),
-        ),
+        CustomSegmentedTabBar(tabs: tabs, selectedIndex: selectedIndex, onChanged: (index) => setState(() => selectedIndex = index)),
         const Gap(24),
-        _buildTabContent(
-          payments: payments,
-          cards: cards,
-          categories: categories,
-        ),
+        _buildTabContent(payments: payments, cards: cards, categories: categories),
         const Gap(20),
       ],
     );
@@ -49,11 +42,7 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
 
   // ---------------- TAB SWITCH ----------------
 
-  Widget _buildTabContent({
-    required List<Payment> payments,
-    required List<BankCard> cards,
-    required List<Category> categories,
-  }) {
+  Widget _buildTabContent({required List<Payment> payments, required List<BankCard> cards, required List<Category> categories}) {
     switch (selectedIndex) {
       case 0:
         return _transactionsTab(payments, cards, categories);
@@ -68,11 +57,7 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
 
   // ---------------- TRANSACTIONS ----------------
 
-  Widget _transactionsTab(
-    List<Payment> payments,
-    List<BankCard> cards,
-    List<Category> categories,
-  ) {
+  Widget _transactionsTab(List<Payment> payments, List<BankCard> cards, List<Category> categories) {
     if (payments.isEmpty) return _emptyState('No transactions yet');
 
     return ListView.separated(
@@ -89,6 +74,7 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
           subtitle: _cardName(payment.cardId, cards),
           amount: '₹ ${payment.amount.toStringAsFixed(0)}',
           highlight: false,
+          icon: _categoryIcon(payment.categoryId, categories),
         );
       },
     );
@@ -108,20 +94,12 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
       itemBuilder: (_, index) {
         final card = cards[index];
 
-        return _itemTile(
-          title: card.bankName,
-          subtitle: card.isPrimary ? 'Primary Card' : card.type,
-          amount: '₹ ${card.balance.toStringAsFixed(0)}',
-          highlight: card.isPrimary,
-        );
+        return _itemTile(title: card.bankName, subtitle: card.isPrimary ? 'Primary Card' : card.type, amount: '₹ ${card.balance.toStringAsFixed(0)}', highlight: card.isPrimary, icon: card.type == 'Debit' ? AppImages.debitCard : AppImages.creditCard);
       },
     );
   }
 
-  Widget _categoriesTab(
-    List<Category> categories,
-    List<Payment> payments,
-  ) {
+  Widget _categoriesTab(List<Category> categories, List<Payment> payments) {
     if (categories.isEmpty) return _emptyState('No categories added');
 
     return ListView.separated(
@@ -133,52 +111,34 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
       itemBuilder: (_, index) {
         final category = categories[index];
 
-        final relatedPayments =
-            payments.where((p) => p!.categoryId == category.id).toList();
+        final relatedPayments = payments.where((p) => p.categoryId == category.id).toList();
 
-        final totalAmount = relatedPayments.fold<double>(
-          0,
-          (sum, p) => sum + p.amount,
-        );
+        final totalAmount = relatedPayments.fold<double>(0, (sum, p) => sum + p.amount);
 
-        return _itemTile(
-          title: category.label,
-          subtitle: '${relatedPayments.length} transactions',
-          amount: '₹ ${totalAmount.toStringAsFixed(0)}',
-          highlight: false,
-        );
+        return _itemTile(title: category.label, subtitle: '${relatedPayments.length} transactions', amount: '₹ ${totalAmount.toStringAsFixed(0)}', highlight: false, icon: category.icon);
       },
     );
   }
 
   // ---------------- TILE ----------------
 
-  Widget _itemTile({
-    required String title,
-    required String subtitle,
-    required String amount,
-    required bool highlight,
-  }) {
+  Widget _itemTile({required String title, required String subtitle, required String amount, required bool highlight, String? icon}) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.surfaceLight.withOpacity(0.3),
+        gradient: highlight ? AppColors.progressGradient : null,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: highlight
-              ? AppColors.primaryNeon
-              : Colors.white.withOpacity(0.05),
-        ),
+        border: Border.all(color: highlight ? AppColors.primaryNeon : Colors.white.withOpacity(0.05)),
       ),
       child: Row(
         children: [
-          const CircleAvatar(
-            radius: 22,
-            backgroundColor: AppColors.background,
-            child: Icon(
-              Icons.account_balance_wallet,
-              color: AppColors.primaryNeon,
-            ),
+          Container(
+            height: 48,
+            width: 48,
+            decoration: BoxDecoration(color: AppColors.background, shape: BoxShape.circle),
+            padding: const EdgeInsets.all(10),
+            child: Image.asset(icon ?? AppImages.bagShopping, color: AppColors.textPrimary, colorBlendMode: BlendMode.srcIn),
           ),
           const Gap(16),
           Expanded(
@@ -192,12 +152,7 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
           ),
           Text(
             amount,
-            style: TextStyle(
-              color: highlight ? AppColors.primaryNeon : Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              fontFamily: GoogleFonts.montserrat().fontFamily,
-            ),
+            style: TextStyle(color: highlight ? AppColors.primaryNeon : Colors.white, fontSize: 16, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
           ),
         ],
       ),
@@ -211,6 +166,14 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
       return categories.firstWhere((c) => c.id == id).label;
     } catch (_) {
       return 'Unknown';
+    }
+  }
+
+  String? _categoryIcon(int id, List<Category> categories) {
+    try {
+      return categories.firstWhere((c) => c.id == id).icon;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -228,10 +191,7 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
       child: Center(
         child: Text(
           text,
-          style: TextStyle(
-            color: Colors.white54,
-            fontFamily: GoogleFonts.montserrat().fontFamily,
-          ),
+          style: TextStyle(color: Colors.white54, fontFamily: GoogleFonts.montserrat().fontFamily),
         ),
       ),
     );
@@ -240,16 +200,6 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
 
 // ---------------- STYLES ----------------
 
-final _titleStyle = TextStyle(
-  color: Colors.white,
-  fontSize: 16,
-  fontWeight: FontWeight.bold,
-  fontFamily: GoogleFonts.montserrat().fontFamily,
-);
+final _titleStyle = TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily);
 
-final _subtitleStyle = TextStyle(
-  color: Colors.white54,
-  fontSize: 12,
-  fontFamily: GoogleFonts.montserrat().fontFamily,
-);
-
+final _subtitleStyle = TextStyle(color: Colors.white54, fontSize: 12, fontFamily: GoogleFonts.montserrat().fontFamily);
