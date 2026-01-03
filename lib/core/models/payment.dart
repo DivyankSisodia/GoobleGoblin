@@ -7,6 +7,8 @@ class Payment {
   final bool isRecurring;
   final String? frequency;
   final bool reminderNotification;
+  final String? note;
+  final String? createdAt;
 
   Payment({
     this.id,
@@ -17,6 +19,8 @@ class Payment {
     required this.isRecurring,
     this.frequency,
     required this.reminderNotification,
+    this.note,
+    this.createdAt,
   });
 
   Map<String, dynamic> toMap() => {
@@ -28,6 +32,8 @@ class Payment {
     'isRecurring': isRecurring ? 1 : 0,
     'frequency': frequency,
     'reminderNotification': reminderNotification ? 1 : 0,
+    'note': note,
+    'createdAt': createdAt ?? DateTime.now().toIso8601String(),
   };
 
   factory Payment.fromMap(Map<String, dynamic> map) => Payment(
@@ -39,5 +45,7 @@ class Payment {
     isRecurring: map['isRecurring'] == 1,
     frequency: map['frequency'],
     reminderNotification: map['reminderNotification'] == 1,
+    note: map['note'],
+    createdAt: map['createdAt'],
   );
 }

@@ -5,6 +5,9 @@ class BankCard {
   final String date;
   final String type;
   final bool isSelected;
+  final bool isPrimary;
+  final String? createdAt;
+  final String? updatedAt;
 
   BankCard({
     this.id,
@@ -13,6 +16,9 @@ class BankCard {
     required this.date,
     required this.type,
     this.isSelected = false,
+    this.isPrimary = false,
+    this.createdAt,
+    this.updatedAt,
   });
 
   bool get isCredit => type == 'Credit';
@@ -23,6 +29,9 @@ class BankCard {
         'balance': balance,
         'date': date,
         'type': type,
+        'isPrimary': isPrimary ? 1 : 0,
+        'createdAt': createdAt ?? DateTime.now().toIso8601String(),
+        'updatedAt': updatedAt ?? DateTime.now().toIso8601String(),
       };
 
   factory BankCard.fromMap(Map<String, dynamic> map) => BankCard(
@@ -32,6 +41,9 @@ class BankCard {
         date: map['date'],
         type: map['type'],
         isSelected: map['isSelected'] ?? false,
+        isPrimary: (map['isPrimary'] as int?) == 1,
+        createdAt: map['createdAt'],
+        updatedAt: map['updatedAt'],
       );
 
   BankCard copyWith({
@@ -41,6 +53,9 @@ class BankCard {
     String? date,
     String? type,
     bool? isSelected,
+    bool? isPrimary,
+    String? createdAt,
+    String? updatedAt,
   }) {
     return BankCard(
       id: id ?? this.id,
@@ -49,6 +64,9 @@ class BankCard {
       date: date ?? this.date,
       type: type ?? this.type,
       isSelected: isSelected ?? this.isSelected,
+      isPrimary: isPrimary ?? this.isPrimary,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }

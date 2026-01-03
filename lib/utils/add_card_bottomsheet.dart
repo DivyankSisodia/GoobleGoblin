@@ -1,6 +1,8 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
+import 'package:gooble_goblin/core/DB/db_helper.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../core/colors.dart';
@@ -68,12 +70,7 @@ class AppBottomSheet {
                     height: 56,
                     child: ElevatedButton(
                       onPressed: () async {
-                        final newCard = BankCard(
-                          bankName: bankNameController.text.trim(),
-                          balance: double.tryParse(amountController.text.trim()) ?? 0.0,
-                          date: DateTime.now().toString(),
-                          type: selectedTabIndex == 1 ? 'Credit' : 'Debit',
-                        );
+                        final newCard = BankCard(bankName: bankNameController.text.trim(), balance: double.tryParse(amountController.text.trim()) ?? 0.0, date: DateTime.now().toString(), type: selectedTabIndex == 1 ? 'Credit' : 'Debit');
                         await ref.read(cardsProvider.notifier).addCard(newCard);
                         Navigator.pop(context);
                       },
@@ -100,6 +97,8 @@ class AppBottomSheet {
     bool isEditing = false;
     final TextEditingController bankNameController = TextEditingController();
     final TextEditingController amountController = TextEditingController();
+
+    bool isPrimary = false;
 
     showModalBottomSheet(
       context: context,
@@ -154,6 +153,7 @@ class AppBottomSheet {
                                           isEditing = true;
                                           bankNameController.text = card.bankName;
                                           amountController.text = card.balance.toString();
+                                          isPrimary = card.isPrimary; // Initialize with current primary status
                                         });
                                       },
                                       child: Container(
@@ -167,10 +167,7 @@ class AppBottomSheet {
                                           children: [
                                             Container(
                                               padding: const EdgeInsets.all(10),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.primaryNeon.withOpacity(0.1),
-                                                shape: BoxShape.circle,
-                                              ),
+                                              decoration: BoxDecoration(color: AppColors.primaryNeon.withOpacity(0.1), shape: BoxShape.circle),
                                               child: Icon(Icons.credit_card, color: AppColors.primaryNeon, size: 20),
                                             ),
                                             const Gap(16),
@@ -178,7 +175,10 @@ class AppBottomSheet {
                                               child: Column(
                                                 crossAxisAlignment: CrossAxisAlignment.start,
                                                 children: [
-                                                  Text(card.bankName, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                                                  Text(
+                                                    card.bankName,
+                                                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                                  ),
                                                   Text('Balance: ₹${card.balance}', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14)),
                                                 ],
                                               ),
@@ -192,25 +192,36 @@ class AppBottomSheet {
                                 ),
                         )
                       else ...[
-                        CardPreviewWidget(
-                          bankName: bankNameController.text,
-                          balance: amountController.text,
-                          isCredit: selectedCard?.isCredit ?? false,
-                        ),
+                        CardPreviewWidget(bankName: bankNameController.text, balance: amountController.text, isCredit: selectedCard?.isCredit ?? false),
                         const Gap(24),
-                        _buildBottomSheetTextField(
-                          controller: bankNameController,
-                          hint: 'Bank Name',
-                          icon: Icons.account_balance_rounded,
-                          onChanged: (val) => setState(() {}),
-                        ),
+                        _buildBottomSheetTextField(controller: bankNameController, hint: 'Bank Name', icon: Icons.account_balance_rounded, onChanged: (val) => setState(() {})),
                         const Gap(16),
-                        _buildBottomSheetTextField(
-                          controller: amountController,
-                          hint: 'Current Bank Amount',
-                          icon: Icons.currency_rupee_rounded,
-                          keyboardType: TextInputType.number,
-                          onChanged: (val) => setState(() {}),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _buildBottomSheetTextField(controller: amountController, hint: 'Current Bank Amount', icon: Icons.currency_rupee_rounded, keyboardType: TextInputType.number, onChanged: (val) => setState(() {})),
+                            ),
+                            // Only show primary card checkbox for debit cards
+                            if (selectedCard?.type == 'Debit') ...[
+                              const Gap(16),
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Transform.scale(
+                                    scale: 1.4,
+                                    child: CupertinoCheckbox(
+                                      value: isPrimary,
+                                      onChanged: (val) => setState(() => isPrimary = val!),
+                                      activeColor: AppColors.primaryNeon,
+                                      checkColor: Colors.black,
+                                    ),
+                                  ),
+                                  Text('Primary card', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily, fontSize: 12)),
+                                ],
+                              ),
+                            ],
+                          ],
                         ),
                         const Gap(32),
                         Row(
@@ -232,11 +243,14 @@ class AppBottomSheet {
                               child: ElevatedButton(
                                 onPressed: () async {
                                   if (selectedCard != null) {
-                                    final updatedCard = selectedCard!.copyWith(
-                                      bankName: bankNameController.text.trim(),
-                                      balance: double.tryParse(amountController.text.trim()) ?? 0.0,
-                                    );
+                                    final updatedCard = selectedCard!.copyWith(bankName: bankNameController.text.trim(), balance: double.tryParse(amountController.text.trim()) ?? 0.0);
                                     await ref.read(cardsProvider.notifier).updateCard(updatedCard);
+
+                                    // Only debit cards can be set as primary
+                                    if (isPrimary && selectedCard!.type == 'Debit') {
+                                      // Use the setPrimaryCard method which handles all the logic
+                                      await DatabaseHelper.instance.setPrimaryCard(updatedCard.id!);
+                                    }
                                     Navigator.pop(context);
                                   }
                                 },
@@ -266,28 +280,18 @@ class AppBottomSheet {
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                                     title: Text(
                                       'Delete Card',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontFamily: GoogleFonts.montserrat().fontFamily,
-                                      ),
+                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
                                     ),
                                     content: Text(
                                       'Are you sure you want to delete ${selectedCard!.bankName}? This action cannot be undone.',
-                                      style: TextStyle(
-                                        color: Colors.white70,
-                                        fontFamily: GoogleFonts.montserrat().fontFamily,
-                                      ),
+                                      style: TextStyle(color: Colors.white70, fontFamily: GoogleFonts.montserrat().fontFamily),
                                     ),
                                     actions: [
                                       TextButton(
                                         onPressed: () => Navigator.pop(context, false),
                                         child: Text(
                                           'Cancel',
-                                          style: TextStyle(
-                                            color: Colors.white70,
-                                            fontFamily: GoogleFonts.montserrat().fontFamily,
-                                          ),
+                                          style: TextStyle(color: Colors.white70, fontFamily: GoogleFonts.montserrat().fontFamily),
                                         ),
                                       ),
                                       ElevatedButton(
@@ -299,10 +303,7 @@ class AppBottomSheet {
                                         ),
                                         child: Text(
                                           'Delete',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontFamily: GoogleFonts.montserrat().fontFamily,
-                                          ),
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
                                         ),
                                       ),
                                     ],
