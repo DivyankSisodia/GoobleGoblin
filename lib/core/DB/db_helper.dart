@@ -339,6 +339,16 @@ class DatabaseHelper {
     );
   }
 
+  Future<List<Payment>> getPaymentByCategory(String category) async {
+    final db = await instance.database;
+    final result = await db.query(
+      'payments',
+      where: 'category = ?',
+      whereArgs: [category],
+    );
+    return result.map((json) => Payment.fromMap(json)).toList();
+  }
+
   // ===== Expenditure Tracking =====
   
   /// Update daily expenditure aggregates for a specific card and date

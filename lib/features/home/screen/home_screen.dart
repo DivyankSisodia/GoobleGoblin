@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:gooble_goblin/core/colors.dart';
-import 'package:gooble_goblin/features/experiment/exp1.dart';
 import 'package:gooble_goblin/features/home/widget/custom_tab_widget.dart';
 import 'package:gooble_goblin/utils/add_card_bottomsheet.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../category/provider/category_provider.dart';
+import '../../payment/provider/transcation_provider.dart';
 import '../widget/monthly_budget_widget.dart';
 import '../widget/total_balance_widget.dart';
 import '../widget/upcoming_payment_widget.dart';
@@ -23,8 +24,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
+
     if (!widget.isFirstTime) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        // await Future.wait<void>([
+        //   ref.read(transactionProvider.notifier).fetchPayments(),
+        //   ref.read(categoryProvider.notifier).loadCategories(),
+        // ]);
+
+        // final payments = ref.read(transactionProvider);
+        // final categories = ref.read(categoryProvider);
+        // print(payments);
+        // print(categories);
+
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted) {
             AppBottomSheet.showAddCardBottomSheet(context, ref);
@@ -32,6 +44,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         });
       });
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future.wait<void>([ref.read(transactionProvider.notifier).fetchPayments(), ref.read(categoryProvider.notifier).loadCategories()]);
+
+      final payments = ref.read(transactionProvider);
+      final categories = ref.read(categoryProvider);
+      print(payments);
+      print(categories);
+    });
   }
 
   @override
@@ -141,12 +162,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             Gap(16),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              child: Row(
-                children: List.generate(
-                  5,
-                  (index) => const UpcomingPaymentWidget(),
-                ),
-              ),
+              child: Row(children: List.generate(5, (index) => const UpcomingPaymentWidget())),
             ),
             const Gap(32),
             const CustomTabWidget(),
@@ -156,5 +172,3 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 }
-
-
