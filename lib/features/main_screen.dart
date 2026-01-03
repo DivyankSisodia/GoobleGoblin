@@ -5,6 +5,7 @@ import 'package:gooble_goblin/core/colors.dart';
 import 'package:gooble_goblin/features/cards/screen/card_screen.dart';
 import 'package:gooble_goblin/features/home/screen/home_screen.dart';
 import 'package:gooble_goblin/features/payment/screen/new_payment_screen.dart';
+import 'package:gooble_goblin/features/payment/screen/wallet_history_screen.dart';
 
 final navigationIndexProvider = StateProvider<int>((ref) => 0);
 
@@ -20,7 +21,7 @@ class MainScreen extends ConsumerWidget {
       HomeScreen(isFirstTime: isFirstTime),
       CardsScreen(),
       const NewPaymentScreen(),
-      const PlaceholderScreen(title: 'History'),
+      const WalletHistoryScreen(),
       const PlaceholderScreen(title: 'Settings'),
     ];
 

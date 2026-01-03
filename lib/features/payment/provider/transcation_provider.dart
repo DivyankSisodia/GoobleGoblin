@@ -3,13 +3,16 @@ import 'package:gooble_goblin/core/models/payment.dart';
 
 import '../../../core/DB/db_helper.dart';
 
+import 'package:gooble_goblin/features/home/provider/cards_provider.dart';
+
 class TransactionNotifier extends StateNotifier<List<Payment>> {
-  TransactionNotifier() : super([]){
+  final Ref _ref;
+  
+  TransactionNotifier(this._ref) : super([]){
     fetchPayments();
   }
 
   Future<List<Payment>> fetchPayments() async {
-    // TODO: implement fetch payments
     final transcations = await DatabaseHelper.instance.getAllPayments();
     state = transcations;
     return transcations;
@@ -18,16 +21,22 @@ class TransactionNotifier extends StateNotifier<List<Payment>> {
   Future<void> addPayment(Payment payment) async {
     await DatabaseHelper.instance.insertPayment(payment);
     await fetchPayments();
+    // Refresh cards to update balances
+    _ref.read(cardsProvider.notifier).loadCards();
   }
 
   Future<void> updatePayment(Payment payment) async {
     await DatabaseHelper.instance.updatePayment(payment);
     await fetchPayments();
+    // Refresh cards to update balances
+    _ref.read(cardsProvider.notifier).loadCards();
   }
 
   Future<void> deletePayment(int id) async {
     await DatabaseHelper.instance.deletePayment(id);
     await fetchPayments();
+    // Refresh cards to update balances
+    _ref.read(cardsProvider.notifier).loadCards();
   }
 
   Future<List<Payment>> getPaymentByCategory(String category) async {
@@ -46,7 +55,7 @@ class TransactionNotifier extends StateNotifier<List<Payment>> {
 }
 
 final transactionProvider = StateNotifierProvider<TransactionNotifier, List<Payment>>((ref) {
-  return TransactionNotifier();
+  return TransactionNotifier(ref);
 });
 
 final recurringPaymentsProvider = FutureProvider<List<Payment>>((ref) async {

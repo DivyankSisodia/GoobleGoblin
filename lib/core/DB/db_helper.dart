@@ -163,17 +163,29 @@ class DatabaseHelper {
 
   Future<int> insertPayment(Payment payment) async {
     final db = await instance.database;
-    final id = await db.insert('payments', payment.toMap());
     
-    // Update expenditure aggregates
-    final date = DateTime.parse(payment.date);
-    final dateStr = date.toIso8601String().split('T')[0]; // YYYY-MM-DD
-    final yearMonth = '${date.year}-${date.month.toString().padLeft(2, '0')}';
-    
-    await updateDailyExpenditure(payment.cardId, dateStr);
-    await updateMonthlyExpenditure(payment.cardId, yearMonth);
-    
-    return id;
+    return await db.transaction((txn) async {
+      // 1. Insert the payment
+      final id = await txn.insert('payments', payment.toMap());
+      
+      // 2. Deduct amount from card balance
+      await txn.execute('''
+        UPDATE cards 
+        SET balance = balance - ?, updatedAt = ?
+        WHERE id = ?
+      ''', [payment.amount, DateTime.now().toIso8601String(), payment.cardId]);
+      
+      // Update expenditure aggregates
+      final date = DateTime.parse(payment.date);
+      final dateStr = date.toIso8601String().split('T')[0];
+      final yearMonth = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+      
+      // We need to call these with the transaction object
+      await _updateDailyExpenditureWithTxn(txn, payment.cardId, dateStr);
+      await _updateMonthlyExpenditureWithTxn(txn, payment.cardId, yearMonth);
+      
+      return id;
+    });
   }
 
   Future<List<BankCard>> getAllCards() async {
@@ -211,22 +223,44 @@ class DatabaseHelper {
 
   Future<int> updatePayment(Payment payment) async {
     final db = await instance.database;
-    final result = await db.update(
-      'payments', 
-      payment.toMap(), 
-      where: 'id = ?', 
-      whereArgs: [payment.id]
-    );
     
-    // Update expenditure aggregates
-    final date = DateTime.parse(payment.date);
-    final dateStr = date.toIso8601String().split('T')[0];
-    final yearMonth = '${date.year}-${date.month.toString().padLeft(2, '0')}';
-    
-    await updateDailyExpenditure(payment.cardId, dateStr);
-    await updateMonthlyExpenditure(payment.cardId, yearMonth);
-    
-    return result;
+    return await db.transaction((txn) async {
+      // 1. Get old payment to calculate balance difference
+      final oldPaymentMap = await txn.query('payments', where: 'id = ?', whereArgs: [payment.id]);
+      if (oldPaymentMap.isNotEmpty) {
+        final oldPayment = Payment.fromMap(oldPaymentMap.first);
+        final oldAmount = oldPayment.amount;
+        final newAmount = payment.amount;
+        final amountDiff = newAmount - oldAmount;
+
+        // 2. Adjust card balance
+        if (amountDiff != 0) {
+          await txn.execute('''
+            UPDATE cards 
+            SET balance = balance - ?, updatedAt = ?
+            WHERE id = ?
+          ''', [amountDiff, DateTime.now().toIso8601String(), payment.cardId]);
+        }
+      }
+
+      // 3. Update the payment
+      final result = await txn.update(
+        'payments', 
+        payment.toMap(), 
+        where: 'id = ?', 
+        whereArgs: [payment.id]
+      );
+      
+      // Update expenditure aggregates
+      final date = DateTime.parse(payment.date);
+      final dateStr = date.toIso8601String().split('T')[0];
+      final yearMonth = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+      
+      await _updateDailyExpenditureWithTxn(txn, payment.cardId, dateStr);
+      await _updateMonthlyExpenditureWithTxn(txn, payment.cardId, yearMonth);
+      
+      return result;
+    });
   }
 
   Future<int> updateCategory(Category category) async {
@@ -242,24 +276,35 @@ class DatabaseHelper {
   Future<int> deletePayment(int id) async {
     final db = await instance.database;
     
-    // Get payment details before deleting
-    final payment = await db.query('payments', where: 'id = ?', whereArgs: [id]);
-    if (payment.isEmpty) return 0;
-    
-    final cardId = payment.first['cardId'] as int;
-    final dateStr = payment.first['date'] as String;
-    final date = DateTime.parse(dateStr);
-    final datePart = date.toIso8601String().split('T')[0];
-    final yearMonth = '${date.year}-${date.month.toString().padLeft(2, '0')}';
-    
-    // Delete the payment
-    final result = await db.delete('payments', where: 'id = ?', whereArgs: [id]);
-    
-    // Update expenditure aggregates
-    await updateDailyExpenditure(cardId, datePart);
-    await updateMonthlyExpenditure(cardId, yearMonth);
-    
-    return result;
+    return await db.transaction((txn) async {
+      // Get payment details before deleting
+      final payments = await txn.query('payments', where: 'id = ?', whereArgs: [id]);
+      if (payments.isEmpty) return 0;
+      
+      final paymentMap = payments.first;
+      final cardId = paymentMap['cardId'] as int;
+      final amount = (paymentMap['amount'] as num).toDouble();
+      final dateStr = paymentMap['date'] as String;
+      final date = DateTime.parse(dateStr);
+      final datePart = date.toIso8601String().split('T')[0];
+      final yearMonth = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+      
+      // 1. Restore the balance to the card
+      await txn.execute('''
+        UPDATE cards 
+        SET balance = balance + ?, updatedAt = ?
+        WHERE id = ?
+      ''', [amount, DateTime.now().toIso8601String(), cardId]);
+
+      // 2. Delete the payment
+      final result = await txn.delete('payments', where: 'id = ?', whereArgs: [id]);
+      
+      // 3. Update expenditure aggregates
+      await _updateDailyExpenditureWithTxn(txn, cardId, datePart);
+      await _updateMonthlyExpenditureWithTxn(txn, cardId, yearMonth);
+      
+      return result;
+    });
   }
 
   Future<int> deleteCategory(int id) async {
@@ -371,7 +416,10 @@ class DatabaseHelper {
   /// Update daily expenditure aggregates for a specific card and date
   Future<void> updateDailyExpenditure(int cardId, String date) async {
     final db = await instance.database;
-    
+    await _updateDailyExpenditureWithTxn(db, cardId, date);
+  }
+
+  Future<void> _updateDailyExpenditureWithTxn(DatabaseExecutor db, int cardId, String date) async {
     // Calculate total for the day
     final result = await db.rawQuery('''
       SELECT SUM(amount) as total, COUNT(*) as count
@@ -398,7 +446,10 @@ class DatabaseHelper {
   /// Update monthly expenditure aggregates for a specific card and month
   Future<void> updateMonthlyExpenditure(int cardId, String yearMonth) async {
     final db = await instance.database;
-    
+    await _updateMonthlyExpenditureWithTxn(db, cardId, yearMonth);
+  }
+
+  Future<void> _updateMonthlyExpenditureWithTxn(DatabaseExecutor db, int cardId, String yearMonth) async {
     // Calculate monthly totals
     final result = await db.rawQuery('''
       SELECT 
