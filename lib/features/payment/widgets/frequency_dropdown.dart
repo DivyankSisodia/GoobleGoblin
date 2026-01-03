@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:gooble_goblin/core/colors.dart';
 
-class FrequencyDropdown extends StatefulWidget {
-  const FrequencyDropdown({super.key});
+class FrequencyDropdown extends StatelessWidget {
+  final String selectedFrequency;
+  final ValueChanged<String> onChanged;
 
-  @override
-  State<FrequencyDropdown> createState() => _FrequencyDropdownState();
-}
+  const FrequencyDropdown({
+    super.key,
+    required this.selectedFrequency,
+    required this.onChanged,
+  });
 
-class _FrequencyDropdownState extends State<FrequencyDropdown> {
-  String selectedFrequency = 'Monthly';
-  final List<String> options = ['Daily', 'Weekly', 'Monthly'];
+  final List<String> options = const ['Daily', 'Weekly', 'Monthly'];
 
-  void _showPicker() {
+  void _showPicker(BuildContext context) {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1A121A), // Match dark background
@@ -29,7 +31,7 @@ class _FrequencyDropdownState extends State<FrequencyDropdown> {
                 textAlign: TextAlign.center,
               ),
               onTap: () {
-                setState(() => selectedFrequency = option);
+                onChanged(option);
                 Navigator.pop(context);
               },
             );
@@ -42,7 +44,7 @@ class _FrequencyDropdownState extends State<FrequencyDropdown> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: _showPicker,
+      onTap: () => _showPicker(context),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
@@ -59,7 +61,7 @@ class _FrequencyDropdownState extends State<FrequencyDropdown> {
             Text(
               selectedFrequency,
               style: const TextStyle(
-                color: Color(0xFFE040FB), // Magenta text
+                color: AppColors.primaryNeonDark, // Magenta text
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
@@ -67,7 +69,7 @@ class _FrequencyDropdownState extends State<FrequencyDropdown> {
             const SizedBox(width: 8),
             const Icon(
               Icons.keyboard_arrow_down,
-              color: Color(0xFFE040FB), // Magenta arrow
+              color: AppColors.primaryNeonDark, // Magenta arrow
             ),
           ],
         ),

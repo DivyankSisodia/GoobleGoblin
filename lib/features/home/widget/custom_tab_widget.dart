@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/svg.dart';
+
 import 'package:gap/gap.dart';
 import 'package:gooble_goblin/core/app_images.dart';
 import 'package:gooble_goblin/core/colors.dart';
@@ -90,9 +90,10 @@ class _CustomTabWidgetState extends State<CustomTabWidget> {
                       shape: BoxShape.circle,
                     ),
                     padding: const EdgeInsets.all(10),
-                    child: SvgPicture.asset(
+                    child: Image.asset(
                       item.icon,
-                      colorFilter: ColorFilter.mode(item.iconColor, BlendMode.srcIn),
+                      color: item.iconColor,
+                      colorBlendMode: BlendMode.srcIn,
                     ),
                   ),
                   const Gap(16),

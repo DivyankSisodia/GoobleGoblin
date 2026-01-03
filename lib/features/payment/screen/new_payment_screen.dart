@@ -1,12 +1,12 @@
-import 'dart:math';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
+import 'package:gooble_goblin/core/DB/db_helper.dart';
 import 'package:gooble_goblin/core/app_images.dart';
 import 'package:gooble_goblin/core/colors.dart';
+import 'package:gooble_goblin/core/models/payment.dart';
 import 'package:gooble_goblin/features/home/provider/cards_provider.dart';
 import 'package:gooble_goblin/features/payment/widgets/amount_widget.dart';
 import 'package:gooble_goblin/features/payment/widgets/custom_chip_widget.dart';
@@ -15,10 +15,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../cards/widget/card_preview_widget.dart';
-import '../../experiment/exp1.dart';
+import '../../main_screen.dart';
 import '../widgets/frequency_dropdown.dart';
 import '../widgets/reoccuring_payment_widget.dart';
 import '../../category/provider/category_provider.dart';
+
+import 'package:gooble_goblin/core/models/category.dart';
 
 class NewPaymentScreen extends ConsumerStatefulWidget {
   const NewPaymentScreen({super.key});
@@ -28,7 +30,11 @@ class NewPaymentScreen extends ConsumerStatefulWidget {
 }
 
 class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
+  final TextEditingController _amountController = TextEditingController(text: "0.00");
   DateTime _selectedDate = DateTime.now();
+  int? _selectedCategoryId;
+  bool _isRecurring = true;
+  String _selectedFrequency = 'Monthly';
   bool _isReminderEnabled = false;
   DateTime _reminderDateTime = DateTime.now().add(const Duration(days: 1));
 
@@ -90,6 +96,106 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
       ),
     );
   }
+
+  void _showAddCategoryDialog() {
+    final TextEditingController labelController = TextEditingController();
+    String selectedIcon = AppImages.bagShopping;
+
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final List<String> availableIcons = [
+            AppImages.netflix,
+            AppImages.youtube,
+            AppImages.zomato,
+            AppImages.swiggy,
+            AppImages.bagShopping,
+            AppImages.mobile,
+            AppImages.bike,
+            AppImages.amazon, 
+            AppImages.cash,
+            AppImages.food,
+            AppImages.utils,
+          ];
+
+          return CupertinoAlertDialog(
+            title: const Text('Add Category'),
+            content: Column(
+              children: [
+                const Gap(16),
+                SizedBox(
+                  height: 200, // Limit height for the grid
+                  width: double.maxFinite,
+                  child: GridView.builder(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 4,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 1.0, // Ensures 1:1 ratio, which is close to 20x20 visually if sized right
+                    ),
+                    itemCount: availableIcons.length,
+                    itemBuilder: (context, index) {
+                      final icon = availableIcons[index];
+                      final isSelected = selectedIcon == icon;
+                      return GestureDetector(
+                        onTap: () => setDialogState(() => selectedIcon = icon),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppColors.primaryNeonDark.withOpacity(0.2)
+                                : Colors.transparent,
+                            border: isSelected
+                                ? Border.all(color: AppColors.primaryNeonDark, width: 2)
+                                : null,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Image.asset(icon, fit: BoxFit.contain),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const Gap(16),
+                CupertinoTextField(
+                  controller: labelController,
+                  placeholder: 'Category Name',
+                  style: const TextStyle(color: AppColors.textPrimary), // Actually textPrimary is white, but need to check if it's visible on dialog
+                  placeholderStyle: TextStyle(color: Colors.grey.withOpacity(0.7)),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('Cancel', style: TextStyle(color: Colors.red)),
+                onPressed: () => Navigator.pop(context),
+              ),
+              CupertinoDialogAction(
+                child: const Text('Add', style: TextStyle(color: AppColors.primaryNeonDark)),
+                onPressed: () {
+                  if (labelController.text.isNotEmpty) {
+                    ref.read(categoryProvider.notifier).addCategory(
+                          Category(
+                            label: labelController.text,
+                            icon: selectedIcon,
+                          ),
+                        );
+                    Navigator.pop(context);
+                  }
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -122,7 +228,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Gap(20),
-            AmountInput(),
+            AmountInput(controller: _amountController),
             Gap(20),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -167,7 +273,16 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
               ),
             ),
             Gap(16),
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: DatePickerPill()),
+            Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: DatePickerPill(
+                  selectedDate: _selectedDate,
+                  onDateChanged: (date) {
+                    setState(() {
+                      _selectedDate = date;
+                    });
+                  },
+                )),
             Gap(20),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -184,24 +299,38 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                 runSpacing: 12,
                 alignment: WrapAlignment.start,
                 children: [
-                  ...categories.map((cat) => CategoryChip(iconPath: AppImages.bagShopping, label: cat.label, isSVG: true)),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: AppColors.textPrimary,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.primaryNeonDark, width: 2),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(CupertinoIcons.add_circled_solid, color: AppColors.primaryNeonDark),
-                        const Gap(8),
-                        Text(
-                          'Add',
-                          style: TextStyle(color: AppColors.primaryNeonDark, fontSize: 16, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
-                        ),
-                      ],
+                  ...categories.map((cat) => CategoryChip(
+                        iconPath: cat.icon,
+                        label: cat.label,
+                        isSVG: false,
+                        isSelected: _selectedCategoryId == cat.id,
+                        onTap: () {
+                          setState(() {
+                            _selectedCategoryId = cat.id;
+                          });
+                        },
+                      )),
+                  InkWell(
+                    onTap: _showAddCategoryDialog,
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.textPrimary,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.primaryNeonDark, width: 2),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(CupertinoIcons.add_circled_solid, color: AppColors.primaryNeonDark),
+                          const Gap(8),
+                          Text(
+                            'Add',
+                            style: TextStyle(color: AppColors.primaryNeonDark, fontSize: 16, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -219,7 +348,14 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                 decoration: BoxDecoration(color: AppColors.textSecondary.withOpacity(0.1), borderRadius: BorderRadius.circular(24)),
                 child: Column(
                   children: [
-                    RecurringPaymentTile(),
+                    RecurringPaymentTile(
+                      value: _isRecurring,
+                      onChanged: (value) {
+                        setState(() {
+                          _isRecurring = value;
+                        });
+                      },
+                    ),
                     Gap(16),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -231,7 +367,14 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                             style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
                           ),
                           Gap(20),
-                          FrequencyDropdown(),
+                          FrequencyDropdown(
+                            selectedFrequency: _selectedFrequency,
+                            onChanged: (freq) {
+                              setState(() {
+                                _selectedFrequency = freq;
+                              });
+                            },
+                          ),
                         ],
                       ),
                     ),
@@ -260,7 +403,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                           Switch(
                             value: _isReminderEnabled,
                             activeColor: Colors.white,
-                            activeTrackColor: const Color(0xFFE040FB),
+                            activeTrackColor: AppColors.primaryNeonDark,
                             inactiveThumbColor: Colors.grey,
                             inactiveTrackColor: Colors.black26,
                             onChanged: (bool value) {
@@ -333,19 +476,57 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
               child: InkWell(
                 splashColor: AppColors.textPrimary.withOpacity(0.2),
                 highlightColor: AppColors.textPrimary.withOpacity(0.2),
-                onTap: () {
+                onTap: () async {
                   HapticFeedback.mediumImpact();
-                  // TODO: add scheduled notification
-                  final NotificationService notificationService = NotificationService.instance;
-                  notificationService.scheduleNotification(
-                    id: Random().nextInt(1000),
-                    title: 'Payment Reminder',
-                    body: 'Don\'t forget to pay your bill!',
-                    scheduledDate: _reminderDateTime,
+
+                  final amount = double.tryParse(_amountController.text) ?? 0.0;
+                  final selectedCard = ref.read(cardsProvider).firstWhere((c) => c.isSelected, orElse: () => ref.read(cardsProvider).first);
+                  
+                  if (amount <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please enter a valid amount')),
+                    );
+                    return;
+                  }
+
+                  if (_selectedCategoryId == null && categories.isNotEmpty) {
+                     _selectedCategoryId = categories.first.id;
+                  }
+
+                  final payment = Payment(
+                    amount: amount,
+                    date: DateFormat('yyyy-MM-dd').format(_selectedDate),
+                    cardId: selectedCard.id ?? 0,
+                    categoryId: _selectedCategoryId ?? 0,
+                    isRecurring: _isRecurring,
+                    frequency: _isRecurring ? _selectedFrequency : null,
+                    reminderNotification: _isReminderEnabled,
                   );
-                  // TODO: Implement save action
-                  // Handle save action
-                  print('Transaction Saved!');
+
+                  try {
+                    await DatabaseHelper.instance.insertPayment(payment);
+                    print('Transaction Saved to DB: ${payment.toMap()}');
+                    
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Payment saved successfully!')),
+                      );
+                      // we need to naviagte to home screen with bottomnavbar index set to 0
+
+                      final selectedIndex = ref.watch(navigationIndexProvider);
+                      ref.read(navigationIndexProvider.notifier).state = 0;
+
+                      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const MainScreen()), (route) => false);
+                      
+                    }
+                  } catch (e) {
+                    print('Error saving transaction: $e');
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error saving payment: $e')),
+                      );
+                    }
+                  }
                 },
                 borderRadius: BorderRadius.circular(30),
                 child: Container(

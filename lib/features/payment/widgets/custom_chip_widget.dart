@@ -8,21 +8,41 @@ class CategoryChip extends StatelessWidget {
   final String iconPath;
   final String label;
   final bool isSVG;
+  final bool isSelected;
+  final VoidCallback onTap;
 
-  const CategoryChip({super.key, required this.iconPath, required this.label, required this.isSVG});
+  const CategoryChip({
+    super.key,
+    required this.iconPath,
+    required this.label,
+    required this.isSVG,
+    required this.isSelected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(color: AppColors.primaryNeonDark.withOpacity(0.5), borderRadius: BorderRadius.circular(16)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min, // 🔥 KEY LINE
-        children: [
-          isSVG ? SvgPicture.asset(iconPath, height: 30, width: 30) : Image.asset(iconPath, height: 30, width: 30),
-          const Gap(8),
-          Text(label, style: const TextStyle(color: Colors.white)),
-        ],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primaryNeonDark
+              : AppColors.primaryNeonDark.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(16),
+          border: isSelected
+              ? Border.all(color: Colors.white, width: 2)
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            isSVG ? SvgPicture.asset(iconPath, height: 30, width: 30) : Image.asset(iconPath, height: 30, width: 30),
+            const Gap(8),
+            Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+          ],
+        ),
       ),
     );
   }

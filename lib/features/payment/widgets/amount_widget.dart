@@ -5,19 +5,21 @@ import 'package:gooble_goblin/core/colors.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AmountInput extends StatefulWidget {
-  const AmountInput({super.key});
+  final TextEditingController controller;
+  const AmountInput({super.key, required this.controller});
 
   @override
   State<AmountInput> createState() => _AmountInputState();
 }
 
 class _AmountInputState extends State<AmountInput> {
-  final TextEditingController _controller =
-      TextEditingController(text: "0.00");
+  // Use the controller passed from parent
+  late TextEditingController _controller;
 
   @override
   void initState() {
     super.initState();
+    _controller = widget.controller;
 
     _controller.addListener(() {
       if (_controller.text.isEmpty) {

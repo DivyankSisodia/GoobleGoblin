@@ -4,15 +4,20 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 class DatePickerPill extends StatefulWidget {
-  const DatePickerPill({super.key});
+  final DateTime selectedDate;
+  final ValueChanged<DateTime> onDateChanged;
+
+  const DatePickerPill({
+    super.key,
+    required this.selectedDate,
+    required this.onDateChanged,
+  });
 
   @override
   State<DatePickerPill> createState() => _DatePickerPillState();
 }
 
 class _DatePickerPillState extends State<DatePickerPill> {
-  DateTime _selectedDate = DateTime.now();
-
   void _openDatePicker() {
     showCupertinoModalPopup(
       context: context,
@@ -48,12 +53,8 @@ class _DatePickerPillState extends State<DatePickerPill> {
             Expanded(
               child: CupertinoDatePicker(
                 mode: CupertinoDatePickerMode.date,
-                initialDateTime: _selectedDate,
-                onDateTimeChanged: (date) {
-                  setState(() {
-                    _selectedDate = date;
-                  });
-                },
+                initialDateTime: widget.selectedDate,
+                onDateTimeChanged: widget.onDateChanged,
               ),
             ),
           ],
@@ -64,7 +65,7 @@ class _DatePickerPillState extends State<DatePickerPill> {
 
   @override
   Widget build(BuildContext context) {
-    final isToday = DateUtils.isSameDay(_selectedDate, DateTime.now());
+    final isToday = DateUtils.isSameDay(widget.selectedDate, DateTime.now());
 
     return GestureDetector(
       onTap: _openDatePicker,
@@ -106,7 +107,7 @@ class _DatePickerPillState extends State<DatePickerPill> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  DateFormat('MMM d, yyyy').format(_selectedDate),
+                  DateFormat('MMM d, yyyy').format(widget.selectedDate),
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.6),
                     fontSize: 12,

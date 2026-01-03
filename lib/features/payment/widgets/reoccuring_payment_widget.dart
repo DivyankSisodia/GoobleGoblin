@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:gooble_goblin/core/colors.dart';
 
-class RecurringPaymentTile extends StatefulWidget {
-  const RecurringPaymentTile({super.key});
+class RecurringPaymentTile extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
 
-  @override
-  State<RecurringPaymentTile> createState() => _RecurringPaymentTileState();
-}
-
-class _RecurringPaymentTileState extends State<RecurringPaymentTile> {
-  bool isSelected = true;
+  const RecurringPaymentTile({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -71,16 +71,12 @@ class _RecurringPaymentTileState extends State<RecurringPaymentTile> {
 
           // 3. Custom Switch
           Switch(
-            value: isSelected,
+            value: value,
             activeColor: Colors.white,
-            activeTrackColor: const Color(0xFFE040FB),
+            activeTrackColor: AppColors.primaryNeonDark,
             inactiveThumbColor: Colors.grey,
             inactiveTrackColor: Colors.black26,
-            onChanged: (bool value) {
-              setState(() {
-                isSelected = value;
-              });
-            },
+            onChanged: onChanged,
           ),
         ],
       ),

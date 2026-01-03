@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/svg.dart';
+
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -25,7 +25,7 @@ class UpcomingPaymentWidget extends StatelessWidget {
             width: 54,
             decoration: const BoxDecoration(color: AppColors.background, shape: BoxShape.circle),
             padding: const EdgeInsets.all(12),
-            child: SvgPicture.asset(AppImages.netflix, colorFilter: const ColorFilter.mode(Color(0xFFE50914), BlendMode.srcIn)),
+            child: Image.asset(AppImages.netflix, color: const Color(0xFFE50914), colorBlendMode: BlendMode.srcIn),
           ),
           const Gap(16),
           Column(
