@@ -1,17 +1,21 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
+import 'package:gooble_goblin/features/home/provider/cards_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/colors.dart';
+import '../../../core/models/card.dart';
 
-class TotalBalanceWidget extends StatelessWidget {
+class TotalBalanceWidget extends ConsumerWidget {
   const TotalBalanceWidget({
     super.key,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final BankCard? primaryCard = ref.watch(primaryCardProvider);
     return Column(
       children: [
         Padding(
@@ -35,7 +39,9 @@ class TotalBalanceWidget extends StatelessWidget {
           child: Align(
             alignment: Alignment.topLeft,
             child: Text(
-              '₹ 66,660',
+              primaryCard != null
+                  ? '₹ ${primaryCard.balance.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}'
+                  : '₹ 00,000',
               style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
             ),
           ),
@@ -57,7 +63,7 @@ class TotalBalanceWidget extends StatelessWidget {
                     Icon(Icons.trending_up, color: AppColors.primaryNeonDark, size: 14),
                     Gap(8),
                     Text(
-                      '+450\$ (3.2%)',
+                      primaryCard != null ? '₹ ${primaryCard.balance.toString().replaceAllMapped(RegExp(r'\(\d{1,3}\)(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}' : '+450\$ (3.2%)',
                       style: TextStyle(
                         color: AppColors.primaryNeonDark,
                         fontSize: 14,

@@ -249,7 +249,7 @@ class AppBottomSheet {
                                     // Only debit cards can be set as primary
                                     if (isPrimary && selectedCard!.type == 'Debit') {
                                       // Use the setPrimaryCard method which handles all the logic
-                                      await DatabaseHelper.instance.setPrimaryCard(updatedCard.id!);
+                                      await ref.read(cardsProvider.notifier).setPrimaryCard(updatedCard.id!);
                                     }
                                     Navigator.pop(context);
                                   }

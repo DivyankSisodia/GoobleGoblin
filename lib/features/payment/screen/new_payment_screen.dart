@@ -37,6 +37,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
   String _selectedFrequency = 'Monthly';
   bool _isReminderEnabled = false;
   DateTime _reminderDateTime = DateTime.now().add(const Duration(days: 1));
+  final TextEditingController descriptionController = TextEditingController();
 
   void _showDateTimePicker() {
     showCupertinoModalPopup(
@@ -59,21 +60,12 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                 children: [
                   Text(
                     'Set Reminder',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      decoration: TextDecoration.none,
-                      fontFamily: GoogleFonts.montserrat().fontFamily,
-                    ),
+                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, decoration: TextDecoration.none, fontFamily: GoogleFonts.montserrat().fontFamily),
                   ),
                   CupertinoButton(
                     child: Text(
                       'Done',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontFamily: GoogleFonts.montserrat().fontFamily,
-                      ),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
                     ),
                     onPressed: () => Navigator.pop(context),
                   ),
@@ -105,19 +97,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
-          final List<String> availableIcons = [
-            AppImages.netflix,
-            AppImages.youtube,
-            AppImages.zomato,
-            AppImages.swiggy,
-            AppImages.bagShopping,
-            AppImages.mobile,
-            AppImages.bike,
-            AppImages.amazon, 
-            AppImages.cash,
-            AppImages.food,
-            AppImages.utils,
-          ];
+          final List<String> availableIcons = [AppImages.netflix, AppImages.youtube, AppImages.zomato, AppImages.swiggy, AppImages.bagShopping, AppImages.mobile, AppImages.bike, AppImages.amazon, AppImages.cash, AppImages.food, AppImages.utils];
 
           return CupertinoAlertDialog(
             title: const Text('Add Category'),
@@ -143,12 +123,8 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: isSelected
-                                ? AppColors.primaryNeonDark.withOpacity(0.2)
-                                : Colors.transparent,
-                            border: isSelected
-                                ? Border.all(color: AppColors.primaryNeonDark, width: 2)
-                                : null,
+                            color: isSelected ? AppColors.primaryNeonDark.withOpacity(0.2) : Colors.transparent,
+                            border: isSelected ? Border.all(color: AppColors.primaryNeonDark, width: 2) : null,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Image.asset(icon, fit: BoxFit.contain),
@@ -163,10 +139,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                   placeholder: 'Category Name',
                   style: const TextStyle(color: AppColors.textPrimary), // Actually textPrimary is white, but need to check if it's visible on dialog
                   placeholderStyle: TextStyle(color: Colors.grey.withOpacity(0.7)),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
                 ),
               ],
             ),
@@ -179,12 +152,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                 child: const Text('Add', style: TextStyle(color: AppColors.primaryNeonDark)),
                 onPressed: () {
                   if (labelController.text.isNotEmpty) {
-                    ref.read(categoryProvider.notifier).addCategory(
-                          Category(
-                            label: labelController.text,
-                            icon: selectedIcon,
-                          ),
-                        );
+                    ref.read(categoryProvider.notifier).addCategory(Category(label: labelController.text, icon: selectedIcon));
                     Navigator.pop(context);
                   }
                 },
@@ -206,7 +174,6 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
     final cards = ref.watch(cardsProvider);
     final cardsNotifier = ref.read(cardsProvider.notifier);
     final categories = ref.watch(categoryProvider);
-
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -268,21 +235,49 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
+                'Description',
+                style: TextStyle(color: AppColors.textPrimary, fontSize: 24, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
+              ),
+            ),
+            Gap(16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CupertinoTextField(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
+                suffix: Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: Icon(CupertinoIcons.pen, color: AppColors.textPrimary),
+                ),
+                controller: descriptionController,
+                placeholder: 'Description',
+                style: const TextStyle(color: AppColors.textPrimary), // Actually textPrimary is white, but need to check if it's visible on dialog
+                placeholderStyle: TextStyle(color: Colors.grey.withOpacity(0.7)),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [Color(0xFF2A1038), Color(0xFF1A0E24)]),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
+            ),
+            Gap(16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
                 'Date',
                 style: TextStyle(color: AppColors.textPrimary, fontSize: 24, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
               ),
             ),
             Gap(16),
             Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: DatePickerPill(
-                  selectedDate: _selectedDate,
-                  onDateChanged: (date) {
-                    setState(() {
-                      _selectedDate = date;
-                    });
-                  },
-                )),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: DatePickerPill(
+                selectedDate: _selectedDate,
+                onDateChanged: (date) {
+                  setState(() {
+                    _selectedDate = date;
+                  });
+                },
+              ),
+            ),
             Gap(20),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -299,17 +294,19 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                 runSpacing: 12,
                 alignment: WrapAlignment.start,
                 children: [
-                  ...categories.map((cat) => CategoryChip(
-                        iconPath: cat.icon,
-                        label: cat.label,
-                        isSVG: false,
-                        isSelected: _selectedCategoryId == cat.id,
-                        onTap: () {
-                          setState(() {
-                            _selectedCategoryId = cat.id;
-                          });
-                        },
-                      )),
+                  ...categories.map(
+                    (cat) => CategoryChip(
+                      iconPath: cat.icon,
+                      label: cat.label,
+                      isSVG: false,
+                      isSelected: _selectedCategoryId == cat.id,
+                      onTap: () {
+                        setState(() {
+                          _selectedCategoryId = cat.id;
+                        });
+                      },
+                    ),
+                  ),
                   InkWell(
                     onTap: _showAddCategoryDialog,
                     borderRadius: BorderRadius.circular(16),
@@ -439,21 +436,12 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                                     children: [
                                       Text(
                                         'Reminder Date & Time',
-                                        style: TextStyle(
-                                          color: Colors.white.withOpacity(0.5),
-                                          fontSize: 12,
-                                          fontFamily: GoogleFonts.montserrat().fontFamily,
-                                        ),
+                                        style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12, fontFamily: GoogleFonts.montserrat().fontFamily),
                                       ),
                                       Gap(4),
                                       Text(
                                         DateFormat('MMM dd, yyyy - hh:mm a').format(_reminderDateTime),
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          fontFamily: GoogleFonts.montserrat().fontFamily,
-                                        ),
+                                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
                                       ),
                                     ],
                                   ),
@@ -481,50 +469,35 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
 
                   final amount = double.tryParse(_amountController.text) ?? 0.0;
                   final selectedCard = ref.read(cardsProvider).firstWhere((c) => c.isSelected, orElse: () => ref.read(cardsProvider).first);
-                  
+
                   if (amount <= 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter a valid amount')),
-                    );
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a valid amount')));
                     return;
                   }
 
                   if (_selectedCategoryId == null && categories.isNotEmpty) {
-                     _selectedCategoryId = categories.first.id;
+                    _selectedCategoryId = categories.first.id;
                   }
 
-                  final payment = Payment(
-                    amount: amount,
-                    date: DateFormat('yyyy-MM-dd').format(_selectedDate),
-                    cardId: selectedCard.id ?? 0,
-                    categoryId: _selectedCategoryId ?? 0,
-                    isRecurring: _isRecurring,
-                    frequency: _isRecurring ? _selectedFrequency : null,
-                    reminderNotification: _isReminderEnabled,
-                  );
+                  final payment = Payment(amount: amount, date: DateFormat('yyyy-MM-dd').format(_selectedDate), cardId: selectedCard.id ?? 0, categoryId: _selectedCategoryId ?? 0, isRecurring: _isRecurring, frequency: _isRecurring ? _selectedFrequency : null, reminderNotification: _isReminderEnabled, note: descriptionController.text.trim());
 
                   try {
                     await DatabaseHelper.instance.insertPayment(payment);
                     print('Transaction Saved to DB: ${payment.toMap()}');
-                    
+
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Payment saved successfully!')),
-                      );
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment saved successfully!')));
                       // we need to naviagte to home screen with bottomnavbar index set to 0
 
-                      final selectedIndex = ref.watch(navigationIndexProvider);
+                      ref.watch(navigationIndexProvider);
                       ref.read(navigationIndexProvider.notifier).state = 0;
 
                       Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const MainScreen()), (route) => false);
-                      
                     }
                   } catch (e) {
                     print('Error saving transaction: $e');
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error saving payment: $e')),
-                      );
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving payment: $e')));
                     }
                   }
                 },

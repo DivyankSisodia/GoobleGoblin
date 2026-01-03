@@ -42,6 +42,16 @@ class CardsNotifier extends StateNotifier<List<BankCard>> {
     }
   }
 
+  Future<void> setPrimaryCard(int cardId) async {
+    final db = DatabaseHelper.instance;
+
+    // Update DB
+    await db.setPrimaryCard(cardId);
+
+    // 🔥 Refresh state so Riverpod knows
+    await loadCards();
+  }
+
   Future<void> updateCard(BankCard card) async {
     await DatabaseHelper.instance.updateCard(card);
     await loadCards();
@@ -53,6 +63,15 @@ class CardsNotifier extends StateNotifier<List<BankCard>> {
     await loadCards();
   }
 }
+
+final primaryCardProvider = Provider<BankCard?>((ref) {
+    final cards = ref.watch(cardsProvider);
+    try {
+      return cards.firstWhere((card) => card.isPrimary);
+    } catch (_) {
+      return null;
+    }
+  });
 
 final cardsProvider = StateNotifierProvider<CardsNotifier, List<BankCard>>((ref) {
   return CardsNotifier();
