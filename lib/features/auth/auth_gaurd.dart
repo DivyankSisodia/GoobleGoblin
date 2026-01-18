@@ -6,7 +6,6 @@ import 'package:gooble_goblin/utils/toast_notification.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:toastification/toastification.dart';
 
 import 'widget/3d_model_widget.dart';
 import 'widget/animated_text_widget.dart';
