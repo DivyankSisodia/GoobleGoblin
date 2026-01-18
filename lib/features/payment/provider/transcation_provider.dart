@@ -4,6 +4,7 @@ import 'package:gooble_goblin/core/models/payment.dart';
 import '../../../core/DB/db_helper.dart';
 
 import 'package:gooble_goblin/features/home/provider/cards_provider.dart';
+import '../../category/provider/category_provider.dart';
 
 class TransactionNotifier extends StateNotifier<List<Payment>> {
   final Ref _ref;
@@ -51,6 +52,15 @@ class TransactionNotifier extends StateNotifier<List<Payment>> {
   Future<List<Payment>> getRecurringPayment() async {
     final payment = await DatabaseHelper.instance.getRecurringPayment();
     return payment;
+  }
+
+  Future<void> clearAllData() async {
+    await DatabaseHelper.instance.deleteAllData();
+    await fetchPayments();
+    // Refresh cards to update balances
+    _ref.read(cardsProvider.notifier).loadCards();
+    // Re-initialize categories if needed, but for now we just refresh
+    _ref.read(categoryProvider.notifier).loadCategories();
   }
 }
 

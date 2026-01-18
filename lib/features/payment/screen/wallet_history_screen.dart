@@ -13,6 +13,7 @@ import '../../category/provider/category_provider.dart';
 import '../../home/provider/cards_provider.dart';
 import '../provider/transcation_provider.dart';
 import '../../main_screen.dart';
+import '../../../utils/toast_notification.dart';
 
 class WalletHistoryScreen extends ConsumerStatefulWidget {
   const WalletHistoryScreen({super.key});
@@ -113,6 +114,35 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
           Text(
             'Wallet History',
             style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
+          ),
+          IconButton(
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  backgroundColor: const Color(0xFF1E1B29),
+                  title: const Text('Delete All Data', style: TextStyle(color: Colors.white)),
+                  content: const Text('Are you sure you want to delete all data? This action cannot be undone.', style: TextStyle(color: Colors.grey)),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await ref.read(transactionProvider.notifier).clearAllData();
+                        if (context.mounted) {
+                          AppToasts.showSuccessToast(context, title: 'Data Deleted Successfully');
+                        }
+                      },
+                      child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                    ),
+                  ],
+                ),
+              );
+            },
+            icon: const Icon(CupertinoIcons.trash, color: Color(0xFFFF4B4B)),
           ),
           IconButton(
             onPressed: () {

@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:toastification/toastification.dart';
 
 class AppToasts{
-  static void showSuccessToast(BuildContext context){
+  static void showSuccessToast(BuildContext context, {String title = 'Successfully Authenticated', String? description}){
     toastification.show(
         context: context, // optional if you use ToastificationWrapper
         type: ToastificationType.success,
         style: ToastificationStyle.simple,
         autoCloseDuration: const Duration(seconds: 3),
-        title: Text('Successfully Authenticated'),
+        title: Text(title),
+        description: description != null ? Text(description) : null,
         // you can also use RichText widget for title and description parameters
         // description: RichText(text: const TextSpan(text: 'This is a sample toast message. ')),
         alignment: Alignment.bottomCenter,
