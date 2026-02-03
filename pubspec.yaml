@@ -32,6 +32,7 @@ dependencies:
   path: ^1.9.1
   sqflite_live: ^1.0.2
   fpdart: ^1.2.0
+  flutter_slidable: ^4.0.3
 
 dev_dependencies:
   flutter_test:

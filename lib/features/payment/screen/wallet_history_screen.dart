@@ -10,7 +10,9 @@ import '../../../core/models/category.dart';
 import '../../../core/utils/currency_utils.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../providers/providers.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../main_screen.dart';
+import 'new_payment_screen.dart';
 
 class WalletHistoryScreen extends ConsumerStatefulWidget {
   const WalletHistoryScreen({super.key});
@@ -353,88 +355,167 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
     final cat = payment.category;
     final categoryColor = PredefinedCategories.getColor(cat?.icon);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceLight.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.03)),
-      ),
-      child: Row(
+    return Slidable(
+      key: ValueKey(payment.id),
+      endActionPane: ActionPane(
+        motion: const ScrollMotion(),
         children: [
-          Container(
-            height: 52,
-            width: 52,
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            padding: const EdgeInsets.all(12),
-            child: cat?.assetPath != null
-                ? Image.asset(cat!.assetPath!)
-                : Icon(Icons.payment, color: categoryColor, size: 24),
+          SlidableAction(
+            onPressed: (context) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      NewPaymentScreen(paymentToEdit: payment),
+                ),
+              );
+            },
+            backgroundColor: AppColors.primaryNeon,
+            foregroundColor: Colors.black,
+            icon: Icons.edit,
+            label: 'Edit',
+            borderRadius: BorderRadius.circular(16),
           ),
-          const Gap(16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          SlidableAction(
+            onPressed: (context) => _confirmDeletePayment(payment),
+            backgroundColor: AppColors.errorRed,
+            foregroundColor: Colors.white,
+            icon: Icons.delete,
+            label: 'Delete',
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ],
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceLight.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.03)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              height: 52,
+              width: 52,
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              padding: const EdgeInsets.all(12),
+              child: cat?.assetPath != null
+                  ? Image.asset(cat!.assetPath!)
+                  : Icon(Icons.payment, color: categoryColor, size: 24),
+            ),
+            const Gap(16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    payment.note?.isNotEmpty == true
+                        ? payment.note!
+                        : (cat?.label ?? 'Expense'),
+                    style: GoogleFonts.montserrat(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    cat?.label ?? 'Other',
+                    style: GoogleFonts.montserrat(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  payment.note?.isNotEmpty == true
-                      ? payment.note!
-                      : (cat?.label ?? 'Expense'),
+                  CurrencyUtils.format(payment.amount),
                   style: GoogleFonts.montserrat(
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
-                Text(
-                  cat?.label ?? 'Other',
-                  style: GoogleFonts.montserrat(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                CurrencyUtils.format(payment.amount),
-                style: GoogleFonts.montserrat(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (payment.isRecurring)
-                Container(
-                  margin: const EdgeInsets.only(top: 4),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryNeon.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'RECURRING',
-                    style: GoogleFonts.montserrat(
-                      color: AppColors.primaryNeon,
-                      fontSize: 8,
-                      fontWeight: FontWeight.bold,
+                if (payment.isRecurring)
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryNeon.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'RECURRING',
+                      style: GoogleFonts.montserrat(
+                        color: AppColors.primaryNeon,
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDeletePayment(Payment payment) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          'Delete Transaction?',
+          style: GoogleFonts.montserrat(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to delete this ${payment.amount} transaction? This cannot be undone.',
+          style: GoogleFonts.montserrat(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.montserrat(color: Colors.white),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              if (payment.id != null) {
+                await ref
+                    .read(paymentsProvider.notifier)
+                    .deletePayment(payment.id!);
+              }
+            },
+            child: Text(
+              'Delete',
+              style: GoogleFonts.montserrat(
+                color: AppColors.errorRed,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),

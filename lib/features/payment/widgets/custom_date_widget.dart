@@ -31,7 +31,9 @@ class _DatePickerPillState extends State<DatePickerPill> {
           children: [
             Container(
               decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.1))),
+                border: Border(
+                  bottom: BorderSide(color: Colors.white.withOpacity(0.1)),
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -40,11 +42,19 @@ class _DatePickerPillState extends State<DatePickerPill> {
                     padding: EdgeInsets.only(left: 20),
                     child: Text(
                       'Select Date',
-                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.normal, decoration: TextDecoration.none),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.normal,
+                        decoration: TextDecoration.none,
+                      ),
                     ),
                   ),
                   CupertinoButton(
-                    child: const Text('Done', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
@@ -52,7 +62,7 @@ class _DatePickerPillState extends State<DatePickerPill> {
             ),
             Expanded(
               child: CupertinoDatePicker(
-                mode: CupertinoDatePickerMode.date,
+                mode: CupertinoDatePickerMode.dateAndTime,
                 initialDateTime: widget.selectedDate,
                 onDateTimeChanged: widget.onDateChanged,
               ),
@@ -74,10 +84,7 @@ class _DatePickerPillState extends State<DatePickerPill> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(28),
           gradient: const LinearGradient(
-            colors: [
-              Color(0xFF2A1038),
-              Color(0xFF1A0E24),
-            ],
+            colors: [Color(0xFF2A1038), Color(0xFF1A0E24)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -107,7 +114,9 @@ class _DatePickerPillState extends State<DatePickerPill> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  DateFormat('MMM d, yyyy').format(widget.selectedDate),
+                  DateFormat(
+                    'MMM d, yyyy  •  hh:mm a',
+                  ).format(widget.selectedDate),
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.6),
                     fontSize: 12,

@@ -16,9 +16,13 @@ import '../widgets/custom_date_widget.dart';
 import '../../cards/widget/card_preview_widget.dart';
 import '../widgets/frequency_dropdown.dart';
 import '../widgets/reoccuring_payment_widget.dart';
+import '../../../core/utils/notification_service.dart';
+import '../../../core/utils/currency_utils.dart';
+import '../../../core/errors/failures.dart';
 
 class NewPaymentScreen extends ConsumerStatefulWidget {
-  const NewPaymentScreen({super.key});
+  final Payment? paymentToEdit;
+  const NewPaymentScreen({super.key, this.paymentToEdit});
 
   @override
   ConsumerState<NewPaymentScreen> createState() => _NewPaymentScreenState();
@@ -36,25 +40,38 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
 
   bool _isRecurring = false;
   String _selectedFrequency = 'Monthly';
-  final bool _isReminderEnabled = false;
+  bool _isReminderEnabled = true; // Default to true for scheduled payments
 
   @override
   void initState() {
     super.initState();
-    // Pre-select first category if available
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final categories = ref.read(categoriesProvider).categories;
-      if (categories.isNotEmpty) {
-        setState(() => _selectedCategoryId = categories.first.id);
-      }
 
-      final cards = ref.read(cardsProvider).cards;
-      if (cards.isNotEmpty) {
-        final primary =
-            cards.where((c) => c.isPrimary).firstOrNull ?? cards.first;
-        setState(() => _selectedCardId = primary.id);
-      }
-    });
+    if (widget.paymentToEdit != null) {
+      final p = widget.paymentToEdit!;
+      _amountController.text = p.amount.toStringAsFixed(2);
+      _descriptionController.text = p.note ?? '';
+      _selectedDate = AppDateUtils.parseIso(p.date) ?? DateTime.now();
+      _selectedCategoryId = p.categoryId;
+      _selectedCardId = p.cardId;
+      _isRecurring = p.isRecurring;
+      _selectedFrequency = p.frequency ?? 'Monthly';
+      _isReminderEnabled = p.reminderNotification;
+    } else {
+      // Pre-select first category if available
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final categories = ref.read(categoriesProvider).categories;
+        if (categories.isNotEmpty) {
+          setState(() => _selectedCategoryId = categories.first.id);
+        }
+
+        final cards = ref.read(cardsProvider).cards;
+        if (cards.isNotEmpty) {
+          final primary =
+              cards.where((c) => c.isPrimary).firstOrNull ?? cards.first;
+          setState(() => _selectedCardId = primary.id);
+        }
+      });
+    }
   }
 
   @override
@@ -65,55 +82,127 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
   }
 
   Future<void> _saveTransaction() async {
-    final amountText = _amountController.text.replaceAll(
-      RegExp(r'[^0-9.]'),
-      '',
-    );
-    final amount = double.tryParse(amountText) ?? 0.0;
+    try {
+      final amountText = _amountController.text.replaceAll(
+        RegExp(r'[^0-9.]'),
+        '',
+      );
+      final amount = double.tryParse(amountText) ?? 0.0;
 
-    if (amount <= 0) {
-      _showError('Please enter a valid amount');
-      return;
-    }
-
-    if (_selectedCardId == null) {
-      _showError('Please select a payment source');
-      return;
-    }
-
-    if (_selectedCategoryId == null) {
-      _showError('Please select a category');
-      return;
-    }
-
-    HapticFeedback.mediumImpact();
-
-    final payment = Payment(
-      amount: amount,
-      date: AppDateUtils.formatIso(_selectedDate),
-      cardId: _selectedCardId!,
-      categoryId: _selectedCategoryId!,
-      isRecurring: _isRecurring,
-      frequency: _isRecurring ? _selectedFrequency : null,
-      reminderNotification: _isReminderEnabled,
-      note: _descriptionController.text.trim(),
-      createdAt: DateTime.now().toIso8601String(),
-    );
-
-    final success = await ref
-        .read(paymentsProvider.notifier)
-        .addPayment(payment);
-
-    if (success && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Transaction saved!')));
-
-      if (Navigator.of(context).canPop()) {
-        Navigator.pop(context);
-      } else {
-        ref.read(navigationIndexProvider.notifier).state = 0;
+      if (amount <= 0) {
+        _showError('Please enter a valid amount');
+        return;
       }
+
+      if (_selectedCardId == null) {
+        _showError('Please select a payment source');
+        return;
+      }
+
+      if (_selectedCategoryId == null) {
+        _showError('Please select a category');
+        return;
+      }
+
+      HapticFeedback.mediumImpact();
+
+      final isEditing = widget.paymentToEdit != null;
+      final payment = Payment(
+        id: widget.paymentToEdit?.id,
+        amount: amount,
+        date: _selectedDate.toIso8601String(), // Use full ISO with time
+        cardId: _selectedCardId!,
+        categoryId: _selectedCategoryId!,
+        isRecurring: _isRecurring,
+        frequency: _isRecurring ? _selectedFrequency : null,
+        reminderNotification: _isReminderEnabled,
+        note: _descriptionController.text.trim(),
+        createdAt:
+            widget.paymentToEdit?.createdAt ?? DateTime.now().toIso8601String(),
+      );
+
+      bool success;
+      int? finalId;
+
+      if (isEditing) {
+        success = await ref
+            .read(paymentsProvider.notifier)
+            .updatePayment(payment);
+        finalId = payment.id;
+        if (!success) {
+          _showError('Failed to update transaction');
+          return;
+        }
+      } else {
+        // Add and get ID
+        final result = await ref
+            .read(paymentRepositoryProvider)
+            .insertPayment(payment);
+
+        if (result.isLeft()) {
+          final failure = result.fold(
+            (l) => l,
+            (r) => const DatabaseFailure(message: 'Unknown error'),
+          );
+          _showError('Error: ${failure.message}');
+          return;
+        }
+
+        success = true;
+        finalId = result.getOrElse((_) => -1);
+
+        // Update local state since we used repository directly
+        ref.read(paymentsProvider.notifier).loadPayments();
+        ref.read(cardsProvider.notifier).loadCards();
+      }
+
+      if (success && mounted) {
+        // Schedule notification if it's in the future
+        if (_isReminderEnabled &&
+            _selectedDate.isAfter(
+              DateTime.now().add(const Duration(seconds: 5)),
+            ) &&
+            finalId != null) {
+          try {
+            final category = ref
+                .read(categoriesProvider)
+                .getCategoryById(_selectedCategoryId!);
+            await NotificationService.instance.scheduleNotification(
+              id: finalId,
+              title: 'Upcoming Payment: ${category?.label ?? "Expense"}',
+              body:
+                  'Your payment of ${CurrencyUtils.format(amount)} is due now. ${payment.note ?? ""}',
+              scheduledDate: _selectedDate,
+            );
+          } catch (e) {
+            print(
+              '⚠️ Notification scheduling failed but payment was saved: $e',
+            );
+            // We don't return here because payment is already saved
+          }
+        } else if (finalId != null) {
+          // Cancel if it was scheduled but now edited to past or disabled
+          await NotificationService.instance.cancelNotification(finalId);
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isEditing ? 'Transaction updated!' : 'Transaction saved!',
+            ),
+          ),
+        );
+
+        if (Navigator.of(context).canPop()) {
+          Navigator.pop(context);
+        } else {
+          ref.read(navigationIndexProvider.notifier).state = 0;
+        }
+      }
+    } catch (e, stack) {
+      print('❌ Error in _saveTransaction: $e');
+      print(stack);
+      _showError('Something went wrong. Please try again.');
     }
   }
 
@@ -134,7 +223,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
-          'New Payment',
+          widget.paymentToEdit != null ? 'Edit Payment' : 'New Payment',
           style: GoogleFonts.montserrat(
             color: Colors.white,
             fontSize: 20,
@@ -307,17 +396,37 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
               const Gap(8),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
                   children: [
-                    Text(
-                      'Frequency',
-                      style: GoogleFonts.montserrat(color: Colors.white70),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Frequency',
+                          style: GoogleFonts.montserrat(color: Colors.white70),
+                        ),
+                        FrequencyDropdown(
+                          selectedFrequency: _selectedFrequency,
+                          onChanged: (freq) =>
+                              setState(() => _selectedFrequency = freq),
+                        ),
+                      ],
                     ),
-                    FrequencyDropdown(
-                      selectedFrequency: _selectedFrequency,
-                      onChanged: (freq) =>
-                          setState(() => _selectedFrequency = freq),
+                    const Gap(12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Notify me',
+                          style: GoogleFonts.montserrat(color: Colors.white70),
+                        ),
+                        CupertinoSwitch(
+                          value: _isReminderEnabled,
+                          activeColor: AppColors.primaryNeon,
+                          onChanged: (val) =>
+                              setState(() => _isReminderEnabled = val),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -356,7 +465,9 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
               const Icon(Icons.check_circle_rounded, color: Colors.white),
               const Gap(12),
               Text(
-                'CONFIRM PAYMENT',
+                widget.paymentToEdit != null
+                    ? 'UPDATE PAYMENT'
+                    : 'CONFIRM PAYMENT',
                 style: GoogleFonts.montserrat(
                   color: Colors.white,
                   fontSize: 16,

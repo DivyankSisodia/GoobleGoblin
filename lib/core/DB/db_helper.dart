@@ -987,7 +987,12 @@ class DatabaseHelper {
       await txn.delete('card_history');
       await txn.delete('cards');
       await txn.delete('categories');
-      await txn.delete('app_settings');
+      // Preserve onboarding status and other essential settings if needed
+      await txn.delete(
+        'app_settings',
+        where: 'key != ?',
+        whereArgs: [AppSettingsKeys.onboardingCompleted],
+      );
     });
   }
 

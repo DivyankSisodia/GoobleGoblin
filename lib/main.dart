@@ -4,7 +4,7 @@ import 'package:toastification/toastification.dart';
 
 import 'core/DB/db_helper.dart';
 import 'core/theme/app_theme.dart';
-import 'features/experiment/exp1.dart';
+import 'core/utils/notification_service.dart';
 import 'features/main_screen.dart';
 import 'features/onboarding/providers/onboarding_provider.dart';
 import 'features/onboarding/screens/onboarding_screen.dart';

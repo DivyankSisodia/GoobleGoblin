@@ -74,6 +74,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
     final notifier = ref.read(onboardingProvider.notifier);
     final success = await notifier.completeOnboarding();
 
+    // Invalidate the provider so that _AppRouter switches to MainScreen
+    ref.invalidate(isOnboardingNeededProvider);
+
     if (success && mounted) {
       // Navigate to main screen
       Navigator.of(context).pushAndRemoveUntil(
