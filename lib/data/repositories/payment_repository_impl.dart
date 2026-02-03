@@ -535,4 +535,19 @@ class PaymentRepositoryImpl implements PaymentRepository {
       );
     }
   }
+
+  @override
+  AsyncResult<bool> seedTestData() async {
+    try {
+      await _dbHelper.seedTestData();
+      return ResultHelper.success(true);
+    } catch (e) {
+      return ResultHelper.failure(
+        const DatabaseFailure(
+          message: 'Failed to seed test data',
+          code: 'SEED_FAILED',
+        ),
+      );
+    }
+  }
 }

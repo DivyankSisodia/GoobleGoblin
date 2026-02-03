@@ -1030,4 +1030,148 @@ class DatabaseHelper {
     );
     return result.map((json) => Payment.fromMap(json)).toList();
   }
+
+  // ============================================================
+  // TEST DATA SEEDING
+  // ============================================================
+
+  /// Seed the database with comprehensive test data
+  Future<void> seedTestData() async {
+    // 1. Clear existing data to start fresh
+    await deleteAllData();
+
+    // 2. Seed Categories (Important for foreign keys)
+    await seedPredefinedCategories();
+    final categories = await getAllCategories();
+    final categoryMap = {for (var c in categories) c.label: c.id!};
+
+    // 3. Seed Cards
+    final cards = [
+      BankCard.debit(bankName: 'HDFC Bank', balance: 75000.0), // Main account
+      BankCard.debit(bankName: 'SBI Savings', balance: 12000.0), // Secondary
+      BankCard.credit(
+        bankName: 'ICICI Amazon',
+        creditLimit: 150000.0,
+      ), // Credit
+      BankCard.cash(balance: 4500.0), // Cash
+    ];
+
+    final cardIds = <String, int>{};
+    for (var card in cards) {
+      final id = await insertCard(card);
+      cardIds[card.bankName] = id;
+    }
+
+    // Set HDFC as primary
+    await setPrimaryCard(cardIds['HDFC Bank']!);
+
+    // 4. Set Budget
+    await setMonthlyBudget(45000.0);
+
+    // 5. Seed Payments (spanning last 45 days)
+    final now = DateTime.now();
+    final random = _Random();
+
+    // Recurring Payments
+    final recurringPayments = [
+      Payment(
+        amount: 15000,
+        date: DateTime(now.year, now.month, 1).toIso8601String(),
+        cardId: cardIds['HDFC Bank']!,
+        categoryId: categoryMap['Rent']!,
+        isRecurring: true,
+        frequency: 'Monthly',
+        reminderNotification: true,
+        note: 'Monthly Rent',
+      ),
+      Payment(
+        amount: 799,
+        date: DateTime(now.year, now.month, 5).toIso8601String(),
+        cardId: cardIds['ICICI Amazon']!,
+        categoryId: categoryMap['Netflix']!,
+        isRecurring: true,
+        frequency: 'Monthly',
+        reminderNotification: true,
+        note: 'Netflix Premium',
+      ),
+      Payment(
+        amount: 189,
+        date: DateTime(now.year, now.month, 10).toIso8601String(),
+        cardId: cardIds['SBI Savings']!,
+        categoryId: categoryMap['YouTube']!,
+        isRecurring: true,
+        frequency: 'Monthly',
+        reminderNotification: false,
+        note: 'YouTube Premium',
+      ),
+    ];
+
+    for (var p in recurringPayments) {
+      await insertPayment(p);
+    }
+
+    // Historical Payments for Analytics
+    final titles = [
+      'Grocery Shopping',
+      'Dinner Out',
+      'Uber Ride',
+      'Starbucks',
+      'Zomato Order',
+      'Movie Night',
+      'Fuel Refill',
+      'Pharmacy',
+      'New Shoes',
+      'Internet Bill',
+      'Electricity Bill',
+      'Gift for Friend',
+    ];
+
+    final historicalCategories = [
+      'Shopping',
+      'Food & Dining',
+      'Transport',
+      'Food & Dining',
+      'Zomato',
+      'Netflix',
+      'Transport',
+      'Utilities',
+      'Shopping',
+      'Utilities',
+      'Utilities',
+      'Shopping',
+    ];
+
+    // Add ~40 random transactions over last 40 days
+    for (int i = 0; i < 40; i++) {
+      final daysAgo = i + random.nextInt(2);
+      if (daysAgo > 45) continue;
+
+      final date = now.subtract(Duration(days: daysAgo));
+      final cardKeys = cardIds.keys.toList();
+      final randomCardKey = cardKeys[random.nextInt(cardKeys.length)];
+      final idx = random.nextInt(titles.length);
+
+      final p = Payment(
+        amount: (random.nextInt(2500) + 50).toDouble(),
+        date: date.toIso8601String(),
+        cardId: cardIds[randomCardKey]!,
+        categoryId:
+            categoryMap[historicalCategories[idx]] ?? categories.first.id!,
+        isRecurring: false,
+        reminderNotification: false,
+        note: titles[idx],
+      );
+
+      await insertPayment(p);
+    }
+  }
+}
+
+/// Simple random helper
+class _Random {
+  int _seed = DateTime.now().millisecondsSinceEpoch;
+  int nextInt(int max) {
+    _seed = (_seed * 1103515245 + 12345) & 0x7fffffff;
+    return _seed % max;
+  }
 }

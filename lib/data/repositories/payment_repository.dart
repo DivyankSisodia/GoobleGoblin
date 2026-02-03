@@ -128,4 +128,7 @@ abstract class PaymentRepository {
 
   /// Delete all payments
   AsyncResult<bool> deleteAllPayments();
+
+  /// Seed test data
+  AsyncResult<bool> seedTestData();
 }

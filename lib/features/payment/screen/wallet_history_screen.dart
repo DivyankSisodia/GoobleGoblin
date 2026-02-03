@@ -103,6 +103,13 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
                 ),
               ),
               IconButton(
+                onPressed: () => _showSeedConfirmation(),
+                icon: const Icon(
+                  CupertinoIcons.lab_flask,
+                  color: AppColors.primaryNeon,
+                ),
+              ),
+              IconButton(
                 onPressed: () {},
                 icon: const Icon(
                   CupertinoIcons.share,
@@ -110,6 +117,58 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSeedConfirmation() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          'Seed Test Data?',
+          style: GoogleFonts.montserrat(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          'This will clear all current data and replace it with over 40 sample transactions, multiple cards, and a budget for testing. Recommended for first-time walkthroughs.',
+          style: GoogleFonts.montserrat(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.montserrat(color: Colors.white),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final success = await ref
+                  .read(paymentsProvider.notifier)
+                  .seedTestData();
+              if (success && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Test data seeded successfully!'),
+                  ),
+                );
+              }
+            },
+            child: Text(
+              'Seed Now',
+              style: GoogleFonts.montserrat(
+                color: AppColors.primaryNeon,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),

@@ -4,6 +4,7 @@ import '../../core/models/payment.dart';
 import '../../core/utils/date_utils.dart';
 import '../../data/repositories/payment_repository.dart';
 import '../../data/repositories/payment_repository_impl.dart';
+import 'analytics_provider.dart';
 import 'cards_provider.dart';
 
 /// Provider for PaymentRepository
@@ -253,6 +254,29 @@ class PaymentsNotifier extends StateNotifier<PaymentsState> {
       (success) {
         loadPayments();
         _ref.read(cardsProvider.notifier).loadCards();
+        return success;
+      },
+    );
+  }
+
+  /// Seed test data
+  Future<bool> seedTestData() async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+
+    final result = await _repository.seedTestData();
+
+    return result.fold(
+      (failure) {
+        state = state.copyWith(isLoading: false, errorMessage: failure.message);
+        return false;
+      },
+      (success) {
+        loadPayments();
+        _ref.read(cardsProvider.notifier).loadCards();
+        // Force refresh analytics if provider is available
+        try {
+          _ref.read(analyticsProvider.notifier).refresh();
+        } catch (_) {}
         return success;
       },
     );
