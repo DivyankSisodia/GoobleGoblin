@@ -1,74 +1,109 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:gooble_goblin/features/experiment/exp1.dart';
-import 'package:gooble_goblin/features/main_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:toastification/toastification.dart';
 
 import 'core/DB/db_helper.dart';
+import 'core/theme/app_theme.dart';
+import 'features/experiment/exp1.dart';
+import 'features/main_screen.dart';
+import 'features/onboarding/providers/onboarding_provider.dart';
+import 'features/onboarding/screens/onboarding_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize notifications
   await NotificationService.instance.init();
 
   // Initialize Database on startup
   await DatabaseHelper.instance.database;
 
-  runApp(const ProviderScope(child: StackedCardsApp()));
+  runApp(const ProviderScope(child: GoobleGoblinApp()));
 }
 
-class StackedCardsApp extends StatefulWidget {
-  const StackedCardsApp({super.key});
+/// Main app widget with onboarding check
+class GoobleGoblinApp extends ConsumerWidget {
+  const GoobleGoblinApp({super.key});
 
   @override
-  State<StackedCardsApp> createState() => _StackedCardsAppState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ToastificationWrapper(
+      child: MaterialApp(
+        title: 'GoobleGoblin',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.darkTheme,
+        home: const _AppRouter(),
+      ),
+    );
+  }
 }
 
-// fix this file
-
-class _StackedCardsAppState extends State<StackedCardsApp> {
-  SharedPreferences? prefs;
-  bool _isLoading = true;
+/// App router that checks onboarding status
+class _AppRouter extends ConsumerWidget {
+  const _AppRouter();
 
   @override
-  void initState() {
-    super.initState();
-    _loadPrefs();
-  }
+  Widget build(BuildContext context, WidgetRef ref) {
+    final onboardingNeeded = ref.watch(isOnboardingNeededProvider);
 
-  Future<void> _loadPrefs() async {
-    prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _isLoading = false;
-    });
+    return onboardingNeeded.when(
+      data: (needsOnboarding) {
+        if (needsOnboarding) {
+          return const OnboardingScreen();
+        }
+        return const MainScreen();
+      },
+      loading: () => const _SplashLoader(),
+      error: (_, __) => const MainScreen(), // Fallback to main if error
+    );
   }
+}
+
+/// Splash loading screen
+class _SplashLoader extends StatelessWidget {
+  const _SplashLoader();
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const MaterialApp(
-        home: Scaffold(
-          backgroundColor: Colors.black,
-          body: Center(
-            child: CircularProgressIndicator(),
-          ),
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // App icon
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                gradient: AppColors.analyticsGradient,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryNeon.withValues(alpha: 0.3),
+                    blurRadius: 30,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.account_balance_wallet_rounded,
+                size: 48,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 32),
+            // Loading indicator
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.primaryNeon,
+              ),
+            ),
+          ],
         ),
-      );
-    }
-
-    return ToastificationWrapper(
-      child: MaterialApp(
-        title: 'Stacked Cards Chain',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          brightness: Brightness.dark,
-          scaffoldBackgroundColor: const Color(0xFF1a1a2e),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF16213e),
-            elevation: 0,
-          ),
-        ),
-        home: const MainScreen(),
       ),
     );
   }

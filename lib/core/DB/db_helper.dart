@@ -1,17 +1,21 @@
-import 'package:gooble_goblin/core/models/category.dart';
-import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_live/sqflite_live.dart';
+import 'package:path/path.dart';
 
 import '../models/card.dart';
 import '../models/payment.dart';
+import '../models/category.dart';
+import '../models/app_settings.dart';
 
+/// Database helper singleton for all database operations
 class DatabaseHelper {
-
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
+
   DatabaseHelper._init();
-  
+
+  /// Current database version
+  static const int _dbVersion = 4;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -25,34 +29,42 @@ class DatabaseHelper {
 
     final db = await openDatabase(
       path,
-      version: 3,
+      version: _dbVersion,
       onCreate: _createDB,
       onConfigure: (db) async => await db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: _onUpgrade,
     );
-    
-    // Initialize sqflite_live on the opened database
-    db.live(port: 8080, enabled: true, level: Level.all);
-    
+
+    // Initialize sqflite_live for debugging (only in debug mode)
+    assert(() {
+      db.live(port: 8080, enabled: true, level: Level.all);
+      return true;
+    }());
+
     return db;
   }
 
+  /// Database migrations
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      await db.execute('ALTER TABLE cards ADD COLUMN type TEXT'); 
+      await db.execute('ALTER TABLE cards ADD COLUMN type TEXT');
     }
+
     if (oldVersion < 3) {
       // Add new columns to cards table
-      await db.execute('ALTER TABLE cards ADD COLUMN isPrimary INTEGER NOT NULL DEFAULT 0');
+      await db.execute(
+        'ALTER TABLE cards ADD COLUMN isPrimary INTEGER NOT NULL DEFAULT 0',
+      );
       await db.execute('ALTER TABLE cards ADD COLUMN createdAt TEXT');
       await db.execute('ALTER TABLE cards ADD COLUMN updatedAt TEXT');
-      
-      // Update existing cards with current timestamp
+
       final now = DateTime.now().toIso8601String();
-      await db.execute("UPDATE cards SET createdAt = '$now', updatedAt = '$now'");
-      
+      await db.execute(
+        "UPDATE cards SET createdAt = '$now', updatedAt = '$now'",
+      );
+
       // Create card_history table
-      await db.execute('''CREATE TABLE card_history (
+      await db.execute('''CREATE TABLE IF NOT EXISTS card_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         cardId INTEGER NOT NULL,
         isPrimary INTEGER NOT NULL,
@@ -60,9 +72,9 @@ class DatabaseHelper {
         endDate TEXT,
         FOREIGN KEY (cardId) REFERENCES cards (id) ON DELETE CASCADE
       )''');
-      
+
       // Create daily_expenditure table
-      await db.execute('''CREATE TABLE daily_expenditure (
+      await db.execute('''CREATE TABLE IF NOT EXISTS daily_expenditure (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         cardId INTEGER NOT NULL,
         date TEXT NOT NULL,
@@ -71,9 +83,9 @@ class DatabaseHelper {
         FOREIGN KEY (cardId) REFERENCES cards (id) ON DELETE CASCADE,
         UNIQUE(cardId, date)
       )''');
-      
+
       // Create monthly_expenditure table
-      await db.execute('''CREATE TABLE monthly_expenditure (
+      await db.execute('''CREATE TABLE IF NOT EXISTS monthly_expenditure (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         cardId INTEGER NOT NULL,
         yearMonth TEXT NOT NULL,
@@ -83,21 +95,101 @@ class DatabaseHelper {
         FOREIGN KEY (cardId) REFERENCES cards (id) ON DELETE CASCADE,
         UNIQUE(cardId, yearMonth)
       )''');
-      
+
       // Add note and createdAt to payments table
       await db.execute('ALTER TABLE payments ADD COLUMN note TEXT');
       await db.execute('ALTER TABLE payments ADD COLUMN createdAt TEXT');
       await db.execute("UPDATE payments SET createdAt = '$now'");
     }
+
+    if (oldVersion < 4) {
+      await _migrateToVersion4(db);
+    }
   }
 
+  /// Version 4 migration: Add account types, credit limits, app settings
+  Future<void> _migrateToVersion4(Database db) async {
+    // 1. Add new columns to cards table
+    try {
+      await db.execute(
+        'ALTER TABLE cards ADD COLUMN accountType TEXT DEFAULT "DEBIT"',
+      );
+    } catch (_) {} // Column might already exist
+
+    try {
+      await db.execute(
+        'ALTER TABLE cards ADD COLUMN creditLimit REAL DEFAULT 0',
+      );
+    } catch (_) {}
+
+    try {
+      await db.execute(
+        'ALTER TABLE cards ADD COLUMN usedAmount REAL DEFAULT 0',
+      );
+    } catch (_) {}
+
+    // 2. Add new columns to categories table
+    try {
+      await db.execute(
+        'ALTER TABLE categories ADD COLUMN isPredefined INTEGER DEFAULT 1',
+      );
+    } catch (_) {}
+
+    try {
+      await db.execute('ALTER TABLE categories ADD COLUMN assetPath TEXT');
+    } catch (_) {}
+
+    // 3. Create app_settings table
+    await db.execute('''CREATE TABLE IF NOT EXISTS app_settings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      key TEXT UNIQUE NOT NULL,
+      value TEXT,
+      updatedAt TEXT
+    )''');
+
+    // 4. Create indexes for performance
+    try {
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(date)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_payments_cardId ON payments(cardId)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_payments_categoryId ON payments(categoryId)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_cards_accountType ON cards(accountType)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_settings_key ON app_settings(key)',
+      );
+    } catch (_) {}
+
+    // 5. Migrate existing cards to set accountType based on type field
+    await db.execute('''
+      UPDATE cards SET accountType = 
+        CASE 
+          WHEN LOWER(type) = 'credit' THEN 'CREDIT'
+          WHEN LOWER(type) = 'cash' THEN 'CASH'
+          ELSE 'DEBIT'
+        END
+      WHERE accountType IS NULL OR accountType = 'DEBIT'
+    ''');
+  }
+
+  /// Create all tables (fresh install)
   Future _createDB(Database db, int version) async {
+    // Categories table
     await db.execute('''CREATE TABLE categories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      label TEXT,
-      icon TEXT
+      label TEXT NOT NULL,
+      icon TEXT,
+      assetPath TEXT,
+      isPredefined INTEGER DEFAULT 1
     )''');
-    
+
+    // Cards table with account types
     await db.execute('''CREATE TABLE cards (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       bankName TEXT NOT NULL,
@@ -106,9 +198,13 @@ class DatabaseHelper {
       type TEXT NOT NULL,
       isPrimary INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL
+      updatedAt TEXT NOT NULL,
+      accountType TEXT DEFAULT 'DEBIT',
+      creditLimit REAL DEFAULT 0,
+      usedAmount REAL DEFAULT 0
     )''');
-    
+
+    // Card history table
     await db.execute('''CREATE TABLE card_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       cardId INTEGER NOT NULL,
@@ -117,7 +213,8 @@ class DatabaseHelper {
       endDate TEXT,
       FOREIGN KEY (cardId) REFERENCES cards (id) ON DELETE CASCADE
     )''');
-    
+
+    // Daily expenditure table
     await db.execute('''CREATE TABLE daily_expenditure (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       cardId INTEGER NOT NULL,
@@ -127,7 +224,8 @@ class DatabaseHelper {
       FOREIGN KEY (cardId) REFERENCES cards (id) ON DELETE CASCADE,
       UNIQUE(cardId, date)
     )''');
-    
+
+    // Monthly expenditure table
     await db.execute('''CREATE TABLE monthly_expenditure (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       cardId INTEGER NOT NULL,
@@ -138,7 +236,8 @@ class DatabaseHelper {
       FOREIGN KEY (cardId) REFERENCES cards (id) ON DELETE CASCADE,
       UNIQUE(cardId, yearMonth)
     )''');
-    
+
+    // Payments table
     await db.execute('''CREATE TABLE payments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       amount REAL NOT NULL,
@@ -153,51 +252,323 @@ class DatabaseHelper {
       FOREIGN KEY (cardId) REFERENCES cards (id) ON DELETE CASCADE,
       FOREIGN KEY (categoryId) REFERENCES categories (id) ON DELETE SET NULL
     )''');
+
+    // App settings table
+    await db.execute('''CREATE TABLE app_settings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      key TEXT UNIQUE NOT NULL,
+      value TEXT,
+      updatedAt TEXT
+    )''');
+
+    // Create indexes
+    await db.execute('CREATE INDEX idx_payments_date ON payments(date)');
+    await db.execute('CREATE INDEX idx_payments_cardId ON payments(cardId)');
+    await db.execute(
+      'CREATE INDEX idx_payments_categoryId ON payments(categoryId)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_cards_accountType ON cards(accountType)',
+    );
+    await db.execute('CREATE INDEX idx_settings_key ON app_settings(key)');
   }
 
-  // Helper methods to insert data
+  // ============================================================
+  // APP SETTINGS OPERATIONS
+  // ============================================================
+
+  /// Get a setting value by key
+  Future<String?> getSetting(String key) async {
+    final db = await database;
+    final result = await db.query(
+      'app_settings',
+      where: 'key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
+    if (result.isEmpty) return null;
+    return result.first['value'] as String?;
+  }
+
+  /// Set a setting value
+  Future<void> setSetting(String key, String value) async {
+    final db = await database;
+    await db.insert('app_settings', {
+      'key': key,
+      'value': value,
+      'updatedAt': DateTime.now().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// Get all settings
+  Future<Map<String, String>> getAllSettings() async {
+    final db = await database;
+    final result = await db.query('app_settings');
+    return {
+      for (final row in result)
+        row['key'] as String: row['value'] as String? ?? '',
+    };
+  }
+
+  /// Check if onboarding is completed
+  Future<bool> isOnboardingCompleted() async {
+    final value = await getSetting(AppSettingsKeys.onboardingCompleted);
+    return value == 'true';
+  }
+
+  /// Mark onboarding as completed
+  Future<void> completeOnboarding() async {
+    await setSetting(AppSettingsKeys.onboardingCompleted, 'true');
+  }
+
+  /// Get monthly budget
+  Future<double> getMonthlyBudget() async {
+    final value = await getSetting(AppSettingsKeys.monthlyBudget);
+    return double.tryParse(value ?? '') ?? 0;
+  }
+
+  /// Set monthly budget
+  Future<void> setMonthlyBudget(double amount) async {
+    await setSetting(AppSettingsKeys.monthlyBudget, amount.toString());
+  }
+
+  // ============================================================
+  // CATEGORY OPERATIONS
+  // ============================================================
+
+  /// Seed predefined categories (called once during onboarding)
+  Future<void> seedPredefinedCategories() async {
+    final db = await database;
+
+    // Check if already seeded
+    final seeded = await getSetting(AppSettingsKeys.categoriesSeeded);
+    if (seeded == 'true') return;
+
+    // Insert predefined categories
+    for (final category in PredefinedCategories.all) {
+      await db.insert('categories', {
+        'label': category.label,
+        'icon': category.icon,
+        'assetPath': category.assetPath,
+        'isPredefined': 1,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+
+    // Mark as seeded
+    await setSetting(AppSettingsKeys.categoriesSeeded, 'true');
+  }
+
+  /// Get all categories
+  Future<List<Category>> getAllCategories() async {
+    final db = await database;
+    final result = await db.query('categories', orderBy: 'label ASC');
+    return result.map((json) => Category.fromMap(json)).toList();
+  }
+
+  /// Get category by ID
+  Future<Category?> getCategoryById(int id) async {
+    final db = await database;
+    final result = await db.query(
+      'categories',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (result.isEmpty) return null;
+    return Category.fromMap(result.first);
+  }
+
+  // ============================================================
+  // CARD OPERATIONS
+  // ============================================================
+
+  /// Insert a new card/account
   Future<int> insertCard(BankCard card) async {
-    final db = await instance.database;
+    final db = await database;
     return await db.insert('cards', card.toMap());
   }
 
+  /// Get all cards/accounts
+  Future<List<BankCard>> getAllCards() async {
+    final db = await database;
+    final result = await db.query(
+      'cards',
+      orderBy: 'isPrimary DESC, bankName ASC',
+    );
+    return result.map((json) => BankCard.fromMap(json)).toList();
+  }
+
+  /// Get cards by account type
+  Future<List<BankCard>> getCardsByType(AccountType type) async {
+    final db = await database;
+    final result = await db.query(
+      'cards',
+      where: 'accountType = ?',
+      whereArgs: [type.dbValue],
+      orderBy: 'bankName ASC',
+    );
+    return result.map((json) => BankCard.fromMap(json)).toList();
+  }
+
+  /// Get cash account
+  Future<BankCard?> getCashAccount() async {
+    final cards = await getCardsByType(AccountType.cash);
+    return cards.isNotEmpty ? cards.first : null;
+  }
+
+  /// Get primary card
+  Future<BankCard?> getPrimaryCard() async {
+    final db = await database;
+    final result = await db.query('cards', where: 'isPrimary = 1', limit: 1);
+    if (result.isEmpty) return null;
+    return BankCard.fromMap(result.first);
+  }
+
+  /// Update a card
+  Future<int> updateCard(BankCard card) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    return await db.update(
+      'cards',
+      {...card.toMap(), 'updatedAt': now},
+      where: 'id = ?',
+      whereArgs: [card.id],
+    );
+  }
+
+  /// Delete a card
+  Future<int> deleteCard(int id) async {
+    final db = await database;
+    return await db.delete('cards', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Set primary card (unsets previous primary)
+  Future<void> setPrimaryCard(int cardId) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+
+    await db.transaction((txn) async {
+      // Unset current primary
+      await txn.execute(
+        '''
+        UPDATE cards SET isPrimary = 0, updatedAt = ? WHERE isPrimary = 1
+      ''',
+        [now],
+      );
+
+      // Set new primary
+      await txn.execute(
+        '''
+        UPDATE cards SET isPrimary = 1, updatedAt = ? WHERE id = ?
+      ''',
+        [now, cardId],
+      );
+    });
+  }
+
+  /// Update card balance (for Cash/Debit)
+  Future<void> updateCardBalance(int cardId, double newBalance) async {
+    final db = await database;
+    await db.execute(
+      '''
+      UPDATE cards SET balance = ?, updatedAt = ? WHERE id = ?
+    ''',
+      [newBalance, DateTime.now().toIso8601String(), cardId],
+    );
+  }
+
+  /// Update credit card used amount
+  Future<void> updateCreditUsed(int cardId, double usedAmount) async {
+    final db = await database;
+    await db.execute(
+      '''
+      UPDATE cards SET usedAmount = ?, updatedAt = ? WHERE id = ?
+    ''',
+      [usedAmount, DateTime.now().toIso8601String(), cardId],
+    );
+  }
+
+  /// Get total balance across all accounts
+  Future<double> getTotalBalance() async {
+    final db = await database;
+
+    // Sum of Cash + Debit balances
+    final debitResult = await db.rawQuery('''
+      SELECT COALESCE(SUM(balance), 0) as total 
+      FROM cards 
+      WHERE accountType IN ('CASH', 'DEBIT')
+    ''');
+    final debitTotal = (debitResult.first['total'] as num?)?.toDouble() ?? 0;
+
+    // Available credit from credit cards
+    final creditResult = await db.rawQuery('''
+      SELECT COALESCE(SUM(creditLimit - usedAmount), 0) as total 
+      FROM cards 
+      WHERE accountType = 'CREDIT'
+    ''');
+    final creditAvailable =
+        (creditResult.first['total'] as num?)?.toDouble() ?? 0;
+
+    return debitTotal + creditAvailable;
+  }
+
+  // ============================================================
+  // PAYMENT OPERATIONS
+  // ============================================================
+
+  /// Insert a payment and update balances
   Future<int> insertPayment(Payment payment) async {
-    final db = await instance.database;
-    
+    final db = await database;
+
     return await db.transaction((txn) async {
       // 1. Insert the payment
       final id = await txn.insert('payments', payment.toMap());
-      
-      // 2. Deduct amount from card balance
-      await txn.execute('''
-        UPDATE cards 
-        SET balance = balance - ?, updatedAt = ?
-        WHERE id = ?
-      ''', [payment.amount, DateTime.now().toIso8601String(), payment.cardId]);
-      
-      // Update expenditure aggregates
+
+      // 2. Get the card to determine how to update balance
+      final cardResult = await txn.query(
+        'cards',
+        where: 'id = ?',
+        whereArgs: [payment.cardId],
+      );
+      if (cardResult.isNotEmpty) {
+        final card = BankCard.fromMap(cardResult.first);
+        final now = DateTime.now().toIso8601String();
+
+        if (card.accountType == AccountType.credit) {
+          // For credit cards: increase used amount
+          await txn.execute(
+            '''
+            UPDATE cards SET usedAmount = usedAmount + ?, updatedAt = ? WHERE id = ?
+          ''',
+            [payment.amount, now, payment.cardId],
+          );
+        } else {
+          // For cash/debit: decrease balance
+          await txn.execute(
+            '''
+            UPDATE cards SET balance = balance - ?, updatedAt = ? WHERE id = ?
+          ''',
+            [payment.amount, now, payment.cardId],
+          );
+        }
+      }
+
+      // 3. Update expenditure aggregates
       final date = DateTime.parse(payment.date);
       final dateStr = date.toIso8601String().split('T')[0];
       final yearMonth = '${date.year}-${date.month.toString().padLeft(2, '0')}';
-      
-      // We need to call these with the transaction object
+
       await _updateDailyExpenditureWithTxn(txn, payment.cardId, dateStr);
       await _updateMonthlyExpenditureWithTxn(txn, payment.cardId, yearMonth);
-      
+
       return id;
     });
   }
 
-  Future<List<BankCard>> getAllCards() async {
-    final db = await instance.database;
-    final result = await db.query('cards');
-    return result.map((json) => BankCard.fromMap(json)).toList();
-  }
-
+  /// Get all payments with category info
   Future<List<Payment>> getAllPayments() async {
-    final db = await instance.database;
+    final db = await database;
     final result = await db.rawQuery('''
-      SELECT p.*, c.label as category_label, c.icon as category_icon
+      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset
       FROM payments p
       LEFT JOIN categories c ON p.categoryId = c.id
       ORDER BY p.date DESC
@@ -205,182 +576,355 @@ class DatabaseHelper {
     return result.map((json) => Payment.fromMap(json)).toList();
   }
 
-  Future<List<Category>> getAllCategories() async {
-    final db = await instance.database;
-    final result = await db.query('categories');
-    return result.map((json) => Category.fromMap(json)).toList();
+  /// Get payments by date range
+  Future<List<Payment>> getPaymentsByDateRange(
+    DateTime start,
+    DateTime end,
+  ) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      '''
+      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset
+      FROM payments p
+      LEFT JOIN categories c ON p.categoryId = c.id
+      WHERE p.date BETWEEN ? AND ?
+      ORDER BY p.date DESC
+    ''',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    return result.map((json) => Payment.fromMap(json)).toList();
   }
 
-  Future<int> insertCategory(Category category) async {
-    final db = await instance.database;
-    return await db.insert('categories', category.toMap());
+  /// Get recurring payments
+  Future<List<Payment>> getRecurringPayments() async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset
+      FROM payments p
+      LEFT JOIN categories c ON p.categoryId = c.id
+      WHERE p.isRecurring = 1
+      ORDER BY p.date ASC
+    ''');
+    return result.map((json) => Payment.fromMap(json)).toList();
   }
 
-  Future<int> updateCard(BankCard card) async {
-    final db = await instance.database;
-    return await db.update('cards', card.toMap(), where: 'id = ?', whereArgs: [card.id]);
-  }
-
+  /// Update a payment
   Future<int> updatePayment(Payment payment) async {
-    final db = await instance.database;
-    
-    return await db.transaction((txn) async {
-      // 1. Get old payment to calculate balance difference
-      final oldPaymentMap = await txn.query('payments', where: 'id = ?', whereArgs: [payment.id]);
-      if (oldPaymentMap.isNotEmpty) {
-        final oldPayment = Payment.fromMap(oldPaymentMap.first);
-        final oldAmount = oldPayment.amount;
-        final newAmount = payment.amount;
-        final amountDiff = newAmount - oldAmount;
+    final db = await database;
 
-        // 2. Adjust card balance
+    return await db.transaction((txn) async {
+      // Get old payment for balance adjustment
+      final oldResult = await txn.query(
+        'payments',
+        where: 'id = ?',
+        whereArgs: [payment.id],
+      );
+      if (oldResult.isNotEmpty) {
+        final oldPayment = Payment.fromMap(oldResult.first);
+        final amountDiff = payment.amount - oldPayment.amount;
+
         if (amountDiff != 0) {
-          await txn.execute('''
-            UPDATE cards 
-            SET balance = balance - ?, updatedAt = ?
-            WHERE id = ?
-          ''', [amountDiff, DateTime.now().toIso8601String(), payment.cardId]);
+          final cardResult = await txn.query(
+            'cards',
+            where: 'id = ?',
+            whereArgs: [payment.cardId],
+          );
+          if (cardResult.isNotEmpty) {
+            final card = BankCard.fromMap(cardResult.first);
+            final now = DateTime.now().toIso8601String();
+
+            if (card.accountType == AccountType.credit) {
+              await txn.execute(
+                '''
+                UPDATE cards SET usedAmount = usedAmount + ?, updatedAt = ? WHERE id = ?
+              ''',
+                [amountDiff, now, payment.cardId],
+              );
+            } else {
+              await txn.execute(
+                '''
+                UPDATE cards SET balance = balance - ?, updatedAt = ? WHERE id = ?
+              ''',
+                [amountDiff, now, payment.cardId],
+              );
+            }
+          }
         }
       }
 
-      // 3. Update the payment
-      final result = await txn.update(
-        'payments', 
-        payment.toMap(), 
-        where: 'id = ?', 
-        whereArgs: [payment.id]
-      );
-      
-      // Update expenditure aggregates
-      final date = DateTime.parse(payment.date);
-      final dateStr = date.toIso8601String().split('T')[0];
-      final yearMonth = '${date.year}-${date.month.toString().padLeft(2, '0')}';
-      
-      await _updateDailyExpenditureWithTxn(txn, payment.cardId, dateStr);
-      await _updateMonthlyExpenditureWithTxn(txn, payment.cardId, yearMonth);
-      
-      return result;
-    });
-  }
-
-  Future<int> updateCategory(Category category) async {
-    final db = await instance.database;
-    return await db.update('categories', category.toMap(), where: 'id = ?', whereArgs: [category.id]);
-  }
-
-  Future<int> deleteCard(int id) async {
-    final db = await instance.database;
-    return await db.delete('cards', where: 'id = ?', whereArgs: [id]);
-  }
-
-  Future<int> deletePayment(int id) async {
-    final db = await instance.database;
-    
-    return await db.transaction((txn) async {
-      // Get payment details before deleting
-      final payments = await txn.query('payments', where: 'id = ?', whereArgs: [id]);
-      if (payments.isEmpty) return 0;
-      
-      final paymentMap = payments.first;
-      final cardId = paymentMap['cardId'] as int;
-      final amount = (paymentMap['amount'] as num).toDouble();
-      final dateStr = paymentMap['date'] as String;
-      final date = DateTime.parse(dateStr);
-      final datePart = date.toIso8601String().split('T')[0];
-      final yearMonth = '${date.year}-${date.month.toString().padLeft(2, '0')}';
-      
-      // 1. Restore the balance to the card
-      await txn.execute('''
-        UPDATE cards 
-        SET balance = balance + ?, updatedAt = ?
-        WHERE id = ?
-      ''', [amount, DateTime.now().toIso8601String(), cardId]);
-
-      // 2. Delete the payment
-      final result = await txn.delete('payments', where: 'id = ?', whereArgs: [id]);
-      
-      // 3. Update expenditure aggregates
-      await _updateDailyExpenditureWithTxn(txn, cardId, datePart);
-      await _updateMonthlyExpenditureWithTxn(txn, cardId, yearMonth);
-      
-      return result;
-    });
-  }
-
-  Future<int> deleteCategory(int id) async {
-    final db = await instance.database;
-    return await db.delete('categories', where: 'id = ?', whereArgs: [id]);
-  }
-
-  // ===== Primary Card Management =====
-  
-  /// Set a card as primary (only one card can be primary at a time)
-  Future<void> setPrimaryCard(int cardId) async {
-    final db = await instance.database;
-    
-    await db.transaction((txn) async {
-      // 1. Get current primary card (if any)
-      final currentPrimary = await txn.query(
-        'cards',
-        where: 'isPrimary = ?',
-        whereArgs: [1],
-      );
-      
-      // 2. If there's a current primary, update its history
-      if (currentPrimary.isNotEmpty) {
-        final oldPrimaryId = currentPrimary.first['id'];
-        
-        // Set old primary to non-primary
-        await txn.update(
-          'cards',
-          {'isPrimary': 0, 'updatedAt': DateTime.now().toIso8601String()},
-          where: 'id = ?',
-          whereArgs: [oldPrimaryId],
-        );
-        
-        // Close the history record for old primary
-        await txn.update(
-          'card_history',
-          {'endDate': DateTime.now().toIso8601String()},
-          where: 'cardId = ? AND endDate IS NULL',
-          whereArgs: [oldPrimaryId],
-        );
-      }
-      
-      // 3. Set new primary card
-      await txn.update(
-        'cards',
-        {'isPrimary': 1, 'updatedAt': DateTime.now().toIso8601String()},
+      return await txn.update(
+        'payments',
+        payment.toMap(),
         where: 'id = ?',
-        whereArgs: [cardId],
+        whereArgs: [payment.id],
       );
-      
-      // 4. Create history record for new primary
-      await txn.insert('card_history', {
-        'cardId': cardId,
-        'isPrimary': 1,
-        'startDate': DateTime.now().toIso8601String(),
-        'endDate': null,
-      });
     });
   }
 
-  /// Get the current primary card
-  Future<BankCard?> getPrimaryCard() async {
-    final db = await instance.database;
-    final result = await db.query(
-      'cards',
-      where: 'isPrimary = ?',
-      whereArgs: [1],
-    );
-    
-    if (result.isEmpty) return null;
-    return BankCard.fromMap(result.first);
+  /// Delete a payment
+  Future<int> deletePayment(int id) async {
+    final db = await database;
+
+    return await db.transaction((txn) async {
+      // Get payment to restore balance
+      final result = await txn.query(
+        'payments',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      if (result.isNotEmpty) {
+        final payment = Payment.fromMap(result.first);
+        final cardResult = await txn.query(
+          'cards',
+          where: 'id = ?',
+          whereArgs: [payment.cardId],
+        );
+
+        if (cardResult.isNotEmpty) {
+          final card = BankCard.fromMap(cardResult.first);
+          final now = DateTime.now().toIso8601String();
+
+          if (card.accountType == AccountType.credit) {
+            await txn.execute(
+              '''
+              UPDATE cards SET usedAmount = usedAmount - ?, updatedAt = ? WHERE id = ?
+            ''',
+              [payment.amount, now, payment.cardId],
+            );
+          } else {
+            await txn.execute(
+              '''
+              UPDATE cards SET balance = balance + ?, updatedAt = ? WHERE id = ?
+            ''',
+              [payment.amount, now, payment.cardId],
+            );
+          }
+        }
+      }
+
+      return await txn.delete('payments', where: 'id = ?', whereArgs: [id]);
+    });
   }
 
-  /// Get card history (when it was primary)
+  // ============================================================
+  // EXPENDITURE TRACKING
+  // ============================================================
+
+  Future<void> _updateDailyExpenditureWithTxn(
+    Transaction txn,
+    int cardId,
+    String date,
+  ) async {
+    final result = await txn.rawQuery(
+      '''
+      SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
+      FROM payments
+      WHERE cardId = ? AND date(date) = date(?)
+    ''',
+      [cardId, date],
+    );
+
+    final total = (result.first['total'] as num?)?.toDouble() ?? 0;
+    final count = (result.first['count'] as int?) ?? 0;
+
+    await txn.insert('daily_expenditure', {
+      'cardId': cardId,
+      'date': date,
+      'totalAmount': total,
+      'transactionCount': count,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> _updateMonthlyExpenditureWithTxn(
+    Transaction txn,
+    int cardId,
+    String yearMonth,
+  ) async {
+    final parts = yearMonth.split('-');
+    final year = int.parse(parts[0]);
+    final month = int.parse(parts[1]);
+    final startDate = DateTime(year, month, 1);
+    final endDate = DateTime(year, month + 1, 0);
+
+    final result = await txn.rawQuery(
+      '''
+      SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
+      FROM payments
+      WHERE cardId = ? AND date BETWEEN ? AND ?
+    ''',
+      [cardId, startDate.toIso8601String(), endDate.toIso8601String()],
+    );
+
+    final total = (result.first['total'] as num?)?.toDouble() ?? 0;
+    final count = (result.first['count'] as int?) ?? 0;
+    final daysInMonth = endDate.day;
+    final avgDaily = daysInMonth > 0 ? total / daysInMonth : 0;
+
+    await txn.insert('monthly_expenditure', {
+      'cardId': cardId,
+      'yearMonth': yearMonth,
+      'totalAmount': total,
+      'transactionCount': count,
+      'avgDailyExpenditure': avgDaily,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// Get monthly spending for current month
+  Future<double> getCurrentMonthSpending() async {
+    final db = await database;
+    final now = DateTime.now();
+    final startOfMonth = DateTime(now.year, now.month, 1);
+
+    final result = await db.rawQuery(
+      '''
+      SELECT COALESCE(SUM(amount), 0) as total
+      FROM payments
+      WHERE date >= ?
+    ''',
+      [startOfMonth.toIso8601String()],
+    );
+
+    return (result.first['total'] as num?)?.toDouble() ?? 0;
+  }
+
+  /// Get spending by category for date range
+  Future<List<Map<String, dynamic>>> getSpendingByCategory({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final db = await database;
+    return await db.rawQuery(
+      '''
+      SELECT 
+        c.id, c.label, c.icon, c.assetPath,
+        COALESCE(SUM(p.amount), 0) as total,
+        COUNT(p.id) as count
+      FROM categories c
+      LEFT JOIN payments p ON c.id = p.categoryId AND p.date BETWEEN ? AND ?
+      GROUP BY c.id
+      HAVING total > 0
+      ORDER BY total DESC
+    ''',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+  }
+
+  // ============================================================
+  // ANALYTICS & INSIGHTS
+  // ============================================================
+
+  /// Get spending trend (this month vs last month)
+  Future<Map<String, double>> getSpendingTrend() async {
+    final db = await database;
+    final now = DateTime.now();
+
+    // This month
+    final thisMonthStart = DateTime(now.year, now.month, 1);
+    final thisMonthResult = await db.rawQuery(
+      '''
+      SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE date >= ?
+    ''',
+      [thisMonthStart.toIso8601String()],
+    );
+    final thisMonth = (thisMonthResult.first['total'] as num?)?.toDouble() ?? 0;
+
+    // Last month
+    final lastMonthStart = DateTime(now.year, now.month - 1, 1);
+    final lastMonthEnd = DateTime(now.year, now.month, 0);
+    final lastMonthResult = await db.rawQuery(
+      '''
+      SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE date BETWEEN ? AND ?
+    ''',
+      [lastMonthStart.toIso8601String(), lastMonthEnd.toIso8601String()],
+    );
+    final lastMonth = (lastMonthResult.first['total'] as num?)?.toDouble() ?? 0;
+
+    return {
+      'thisMonth': thisMonth,
+      'lastMonth': lastMonth,
+      'difference': thisMonth - lastMonth,
+      'percentChange': lastMonth > 0
+          ? ((thisMonth - lastMonth) / lastMonth * 100)
+          : 0,
+    };
+  }
+
+  /// Get fun stats for month-end summary
+  Future<Map<String, dynamic>> getMonthEndStats() async {
+    final db = await database;
+    final now = DateTime.now();
+    final startOfMonth = DateTime(now.year, now.month, 1);
+
+    // Total spending
+    final totalResult = await db.rawQuery(
+      '''
+      SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count FROM payments WHERE date >= ?
+    ''',
+      [startOfMonth.toIso8601String()],
+    );
+
+    // Top category
+    final topCatResult = await db.rawQuery(
+      '''
+      SELECT c.label, COUNT(*) as count, SUM(p.amount) as total
+      FROM payments p
+      LEFT JOIN categories c ON p.categoryId = c.id
+      WHERE p.date >= ?
+      GROUP BY c.id
+      ORDER BY count DESC
+      LIMIT 1
+    ''',
+      [startOfMonth.toIso8601String()],
+    );
+
+    // Biggest single expense
+    final biggestResult = await db.rawQuery(
+      '''
+      SELECT p.amount, c.label as category
+      FROM payments p
+      LEFT JOIN categories c ON p.categoryId = c.id
+      WHERE p.date >= ?
+      ORDER BY p.amount DESC
+      LIMIT 1
+    ''',
+      [startOfMonth.toIso8601String()],
+    );
+
+    // Days with spending
+    final activeDaysResult = await db.rawQuery(
+      '''
+      SELECT COUNT(DISTINCT date(date)) as days FROM payments WHERE date >= ?
+    ''',
+      [startOfMonth.toIso8601String()],
+    );
+
+    return {
+      'totalSpent': (totalResult.first['total'] as num?)?.toDouble() ?? 0,
+      'transactionCount': totalResult.first['count'] ?? 0,
+      'topCategory': topCatResult.isNotEmpty
+          ? topCatResult.first['label']
+          : null,
+      'topCategoryCount': topCatResult.isNotEmpty
+          ? topCatResult.first['count']
+          : 0,
+      'biggestExpense': biggestResult.isNotEmpty
+          ? (biggestResult.first['amount'] as num?)?.toDouble()
+          : null,
+      'biggestExpenseCategory': biggestResult.isNotEmpty
+          ? biggestResult.first['category']
+          : null,
+      'activeDays': activeDaysResult.first['days'] ?? 0,
+      'daysInMonth': now.day,
+    };
+  }
+
+  // ============================================================
+  // LEGACY METHODS (for backwards compatibility)
+  // ============================================================
+
+  /// Get card history
   Future<List<Map<String, dynamic>>> getCardHistory(int cardId) async {
-    final db = await instance.database;
+    final db = await database;
     return await db.query(
       'card_history',
       where: 'cardId = ?',
@@ -389,180 +933,101 @@ class DatabaseHelper {
     );
   }
 
-  Future<List<Payment>> getPaymentByCategory(String categoryLabel) async {
-    final db = await instance.database;
-    final result = await db.rawQuery('''
-      SELECT p.*, c.label as category_label, c.icon as category_icon
-      FROM payments p
-      INNER JOIN categories c ON p.categoryId = c.id
-      WHERE c.label = ?
-    ''', [categoryLabel]);
-    return result.map((json) => Payment.fromMap(json)).toList();
+  /// Insert a category (legacy support)
+  Future<int> insertCategory(Category category) async {
+    final db = await database;
+    return await db.insert('categories', category.toMap());
   }
 
+  /// Update a category
+  Future<int> updateCategory(Category category) async {
+    final db = await database;
+    return await db.update(
+      'categories',
+      category.toMap(),
+      where: 'id = ?',
+      whereArgs: [category.id],
+    );
+  }
+
+  /// Delete a category
+  Future<int> deleteCategory(int id) async {
+    final db = await database;
+    return await db.delete('categories', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Get recurring payments (alias)
   Future<List<Payment>> getRecurringPayment() async {
-    final db = await instance.database;
-    final result = await db.rawQuery('''
-      SELECT p.*, c.label as category_label, c.icon as category_icon
+    return await getRecurringPayments();
+  }
+
+  /// Get payments by category
+  Future<List<Payment>> getPaymentByCategory(int categoryId) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      '''
+      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset
       FROM payments p
       LEFT JOIN categories c ON p.categoryId = c.id
-      WHERE p.isRecurring = ?
-    ''', [1]);
+      WHERE p.categoryId = ?
+      ORDER BY p.date DESC
+    ''',
+      [categoryId],
+    );
     return result.map((json) => Payment.fromMap(json)).toList();
   }
-  
-  // ===== Expenditure Tracking =====
-  
-  /// Update daily expenditure aggregates for a specific card and date
-  Future<void> updateDailyExpenditure(int cardId, String date) async {
-    final db = await instance.database;
-    await _updateDailyExpenditureWithTxn(db, cardId, date);
-  }
 
-  Future<void> _updateDailyExpenditureWithTxn(DatabaseExecutor db, int cardId, String date) async {
-    // Calculate total for the day
-    final result = await db.rawQuery('''
-      SELECT SUM(amount) as total, COUNT(*) as count
-      FROM payments
-      WHERE cardId = ? AND date(date) = date(?)
-    ''', [cardId, date]);
-    
-    final total = (result.first['total'] as num?)?.toDouble() ?? 0.0;
-    final count = (result.first['count'] as int?) ?? 0;
-    
-    // Insert or update daily expenditure
-    await db.insert(
-      'daily_expenditure',
-      {
-        'cardId': cardId,
-        'date': date,
-        'totalAmount': total,
-        'transactionCount': count,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-  }
-
-  /// Update monthly expenditure aggregates for a specific card and month
-  Future<void> updateMonthlyExpenditure(int cardId, String yearMonth) async {
-    final db = await instance.database;
-    await _updateMonthlyExpenditureWithTxn(db, cardId, yearMonth);
-  }
-
-  Future<void> _updateMonthlyExpenditureWithTxn(DatabaseExecutor db, int cardId, String yearMonth) async {
-    // Calculate monthly totals
-    final result = await db.rawQuery('''
-      SELECT 
-        SUM(amount) as total, 
-        COUNT(*) as count,
-        AVG(amount) as avgDaily
-      FROM payments
-      WHERE cardId = ? AND strftime('%Y-%m', date) = ?
-    ''', [cardId, yearMonth]);
-    
-    final total = (result.first['total'] as num?)?.toDouble() ?? 0.0;
-    final count = (result.first['count'] as int?) ?? 0;
-    final avgDaily = (result.first['avgDaily'] as num?)?.toDouble() ?? 0.0;
-    
-    // Insert or update monthly expenditure
-    await db.insert(
-      'monthly_expenditure',
-      {
-        'cardId': cardId,
-        'yearMonth': yearMonth,
-        'totalAmount': total,
-        'transactionCount': count,
-        'avgDailyExpenditure': avgDaily,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-  }
-
-  /// Get daily expenditure for chart (last N days)
-  Future<List<Map<String, dynamic>>> getDailyExpenditure(int cardId, int days) async {
-    final db = await instance.database;
-    return await db.rawQuery('''
-      SELECT date, totalAmount, transactionCount
-      FROM daily_expenditure
-      WHERE cardId = ?
-      AND date >= date('now', '-$days days')
-      ORDER BY date ASC
-    ''', [cardId]);
-  }
-
-  /// Get monthly expenditure for chart (last 12 months)
-  Future<List<Map<String, dynamic>>> getMonthlyExpenditure(int cardId, {int months = 12}) async {
-    final db = await instance.database;
-    return await db.rawQuery('''
-      SELECT yearMonth, totalAmount, transactionCount, avgDailyExpenditure
-      FROM monthly_expenditure
-      WHERE cardId = ?
-      AND yearMonth >= strftime('%Y-%m', date('now', '-$months months'))
-      ORDER BY yearMonth ASC
-    ''', [cardId]);
-  }
-
-  /// Compare all cards for current month
-  Future<List<Map<String, dynamic>>> compareCardsThisMonth() async {
-    final db = await instance.database;
-    return await db.rawQuery('''
-      SELECT 
-        c.id,
-        c.bankName, 
-        c.type, 
-        c.isPrimary, 
-        c.balance,
-        COALESCE(m.totalAmount, 0) as totalAmount,
-        COALESCE(m.transactionCount, 0) as transactionCount
-      FROM cards c
-      LEFT JOIN monthly_expenditure m ON c.id = m.cardId
-        AND m.yearMonth = strftime('%Y-%m', 'now')
-      ORDER BY c.isPrimary DESC, m.totalAmount DESC
-    ''');
-  }
-
-  /// Get expenditure by category for a card
-  Future<List<Map<String, dynamic>>> getExpenditureByCategoryForCard(
-    int cardId, 
-    {String? startDate, String? endDate}
-  ) async {
-    final db = await instance.database;
-    
-    String whereClause = 'p.cardId = ?';
-    List<dynamic> whereArgs = [cardId];
-    
-    if (startDate != null && endDate != null) {
-      whereClause += ' AND p.date BETWEEN ? AND ?';
-      whereArgs.addAll([startDate, endDate]);
-    }
-    
-    return await db.rawQuery('''
-      SELECT 
-        c.label as categoryName,
-        c.icon as categoryIcon,
-        SUM(p.amount) as totalAmount,
-        COUNT(p.id) as transactionCount
-      FROM payments p
-      LEFT JOIN categories c ON p.categoryId = c.id
-      WHERE $whereClause
-      GROUP BY p.categoryId
-      ORDER BY totalAmount DESC
-    ''', whereArgs);
-  }
-
-  /// Delete all data from all tables
+  /// Delete all data (reset app)
   Future<void> deleteAllData() async {
-    final db = await instance.database;
+    final db = await database;
     await db.transaction((txn) async {
       await txn.delete('payments');
       await txn.delete('daily_expenditure');
       await txn.delete('monthly_expenditure');
       await txn.delete('card_history');
       await txn.delete('cards');
-      // Optionally we might want to keep categories if they are system-defined, 
-      // but the request said "ala from tables".
-      // Let's clear categories too as per request.
-      // await txn.delete('categories');
+      await txn.delete('categories');
+      await txn.delete('app_settings');
     });
+  }
+
+  /// Get a card by ID
+  Future<BankCard?> getCardById(int id) async {
+    final db = await database;
+    final result = await db.query('cards', where: 'id = ?', whereArgs: [id]);
+    if (result.isEmpty) return null;
+    return BankCard.fromMap(result.first);
+  }
+
+  /// Get payment by ID
+  Future<Payment?> getPaymentById(int id) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      '''
+      SELECT p.*, c.label as category_label, c.icon as category_icon
+      FROM payments p
+      LEFT JOIN categories c ON p.categoryId = c.id
+      WHERE p.id = ?
+    ''',
+      [id],
+    );
+    if (result.isEmpty) return null;
+    return Payment.fromMap(result.first);
+  }
+
+  /// Search payments by note
+  Future<List<Payment>> searchPayments(String query) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      '''
+      SELECT p.*, c.label as category_label, c.icon as category_icon
+      FROM payments p
+      LEFT JOIN categories c ON p.categoryId = c.id
+      WHERE p.note LIKE ? OR c.label LIKE ?
+      ORDER BY p.date DESC
+    ''',
+      ['%$query%', '%$query%'],
+    );
+    return result.map((json) => Payment.fromMap(json)).toList();
   }
 }

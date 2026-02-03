@@ -1,11 +1,13 @@
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:gooble_goblin/core/colors.dart';
-import 'package:gooble_goblin/features/cards/screen/card_screen.dart';
-import 'package:gooble_goblin/features/home/screen/home_screen.dart';
-import 'package:gooble_goblin/features/payment/screen/new_payment_screen.dart';
-import 'package:gooble_goblin/features/payment/screen/wallet_history_screen.dart';
+
+import '../core/theme/app_theme.dart';
+import 'analytics/screens/analytics_screen.dart';
+import 'cards/screen/card_screen.dart';
+import 'home/screen/home_screen.dart';
+import 'payment/screen/new_payment_screen.dart';
+import 'payment/screen/wallet_history_screen.dart';
 
 final navigationIndexProvider = StateProvider<int>((ref) => 0);
 
@@ -22,7 +24,7 @@ class MainScreen extends ConsumerWidget {
       CardsScreen(),
       const NewPaymentScreen(),
       const WalletHistoryScreen(),
-      const PlaceholderScreen(title: 'Settings'),
+      const AnalyticsScreen(), // Replaced Settings with Analytics
     ];
 
     return Scaffold(
@@ -35,7 +37,11 @@ class MainScreen extends ConsumerWidget {
           Icon(Icons.credit_card_rounded, size: 30, color: Colors.black),
           Icon(Icons.add_rounded, size: 30, color: Colors.black),
           Icon(Icons.history_rounded, size: 30, color: Colors.black),
-          Icon(Icons.settings_rounded, size: 30, color: Colors.black),
+          Icon(
+            Icons.insights_rounded,
+            size: 30,
+            color: Colors.black,
+          ), // Changed to insights icon
         ],
         color: AppColors.primaryNeon,
         buttonBackgroundColor: AppColors.primaryNeon,
@@ -62,7 +68,11 @@ class PlaceholderScreen extends StatelessWidget {
       body: Center(
         child: Text(
           title,
-          style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
     );

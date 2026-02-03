@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../main_screen.dart';
 
-import '../../../core/colors.dart';
-import '../../home/provider/cards_provider.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../providers/providers.dart';
 import '../../home/widget/custom_segmented_tab_bar.dart';
 import '../widget/card_preview_widget.dart';
 import '../widget/stacked_cards.dart';
@@ -23,47 +24,67 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cards = ref.watch(cardsProvider);
+    final cardsState = ref.watch(cardsProvider);
+    final cards = cardsState.cards;
 
-    final filteredCards = cards.where((c) => c.isCredit == (selectedTabIndex == 1)).toList();
+    // Filter cards based on type (Debit vs Credit)
+    //selectedTabIndex 0 -> Debit, 1 -> Credit
+    final filteredCards = cards.where((c) {
+      if (selectedTabIndex == 0) return c.isDebit || c.isCash;
+      return c.isCredit;
+    }).toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        elevation: 1,
-        backgroundColor: AppColors.background,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
         title: Text(
           'My Wallet',
-          style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
+          style: GoogleFonts.montserrat(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
         ),
+        centerTitle: true,
         leading: IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.pop(context);
+            } else {
+              ref.read(navigationIndexProvider.notifier).state = 0;
+            }
+          },
           icon: const Icon(CupertinoIcons.back, color: Colors.white),
         ),
         actions: [
-          InkWell(
-            onTap: () {
-              final cardType = selectedTabIndex == 0 ? 'Debit' : 'Credit';
-              AppBottomSheet.showManageCardsBottomSheet(context, ref, cardType);
-            },
-            child: Container(
-              margin: const EdgeInsets.only(right: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.primaryNeonDark,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.primaryNeonDark.withOpacity(0.7), width: 1, style: BorderStyle.solid),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.edit, color: AppColors.surface),
-                  Gap(6),
-                  Text('Edit', style: TextStyle(color: AppColors.surface, fontSize: 16, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily)),
-                ],
+          if (filteredCards.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: IconButton(
+                onPressed: () {
+                  final cardType = selectedTabIndex == 0 ? 'Debit' : 'Credit';
+                  AppBottomSheet.showManageCardsBottomSheet(
+                    context,
+                    ref,
+                    cardType,
+                  );
+                },
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryNeon.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.edit,
+                    color: AppColors.primaryNeon,
+                    size: 20,
+                  ),
+                ),
               ),
             ),
-          ),
-          
         ],
       ),
       body: Padding(
@@ -73,104 +94,156 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
           children: [
             Text(
               'Manage\nCards',
-              style: TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
+              style: GoogleFonts.montserrat(
+                color: Colors.white,
+                fontSize: 40,
+                fontWeight: FontWeight.bold,
+                height: 1.1,
+              ),
             ),
             const Gap(12),
             Text(
-              'Add or create new cards',
-              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500, fontFamily: GoogleFonts.montserrat().fontFamily),
+              'Add or organize your payment sources',
+              style: GoogleFonts.montserrat(
+                color: Colors.white70,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-            const Gap(24),
+            const Gap(32),
 
             /// Tabs
-            Container(
-              decoration: BoxDecoration(color: AppColors.surfaceLight.withOpacity(0.5), borderRadius: BorderRadius.circular(30)),
-              child: CustomSegmentedTabBar(
-                tabs: const ['Debit Card', 'Credit Card'],
-                selectedIndex: selectedTabIndex,
-                onChanged: (index) {
-                  setState(() => selectedTabIndex = index);
+            CustomSegmentedTabBar(
+              tabs: const ['Debit & Cash', 'Credit Cards'],
+              selectedIndex: selectedTabIndex,
+              onChanged: (index) {
+                setState(() => selectedTabIndex = index);
+              },
+            ),
+
+            const Gap(32),
+
+            /// Cards area
+            Expanded(
+              child: Builder(
+                builder: (_) {
+                  if (cardsState.isLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (filteredCards.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            selectedTabIndex == 0
+                                ? Icons.account_balance_wallet_outlined
+                                : Icons.credit_card_off_outlined,
+                            color: Colors.white10,
+                            size: 80,
+                          ),
+                          const Gap(16),
+                          Text(
+                            'No ${selectedTabIndex == 0 ? 'debit' : 'credit'} cards found',
+                            style: GoogleFonts.montserrat(
+                              color: Colors.white38,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  if (filteredCards.length == 1) {
+                    final card = filteredCards.first;
+                    return Center(
+                      child: CardPreviewWidget(
+                        bankName: card.bankName,
+                        balance: card.displayBalance.toStringAsFixed(2),
+                        isCredit: card.isCredit,
+                        isSelected: card.isSelected,
+                        onTap: () {
+                          ref
+                              .read(cardsProvider.notifier)
+                              .toggleCardSelection(card.id);
+                        },
+                      ),
+                    );
+                  }
+
+                  return StackedCardsView(
+                    cards: filteredCards,
+                    onCardTap: (id) {
+                      ref.read(cardsProvider.notifier).toggleCardSelection(id);
+                    },
+                  );
                 },
-                backgroundColor: AppColors.surfaceLight.withOpacity(0.1),
               ),
             ),
 
             const Gap(24),
 
-            /// Cards area
-            Builder(
-              builder: (_) {
-                /// 0 cards
-                if (filteredCards.isEmpty) {
-                  return Center(
-                    child: Text('No cards found', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 16)),
-                  );
-                }
-            
-                /// 1 card
-                if (filteredCards.length == 1) {
-                  final card = filteredCards.first;
-                  return Center(
-                    child: CardPreviewWidget(
-                      bankName: card.bankName,
-                      balance: card.balance.toString(),
-                      isCredit: card.isCredit,
-                      isSelected: card.isSelected,
-                      onTap: () {
-                        ref.read(cardsProvider.notifier).toggleCardSelection(card.id);
-                      },
-                    ),
-                  );
-                }
-            
-                /// 2+ cards → stacked
-                return StackedCardsView(
-                  cards: filteredCards,
-                  onCardTap: (id) {
-                    ref.read(cardsProvider.notifier).toggleCardSelection(id);
-                  },
-                );
-              },
-            ),
-            Gap(24),
-            GestureDetector(
+            // Add card button
+            InkWell(
               onTap: () {
                 AppBottomSheet.showAddCardBottomSheet(context, ref);
               },
+              borderRadius: BorderRadius.circular(24),
               child: Container(
-                height: 72,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [AppColors.surfaceLight, AppColors.surface]),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.primaryNeonDark.withOpacity(0.7), width: 1, style: BorderStyle.solid),
+                  color: AppColors.surfaceLight.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.05),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    /// Plus icon
                     Container(
-                      height: 42,
-                      width: 42,
-                      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.12)),
-                      child: const Icon(Icons.add, color: Colors.white, size: 22),
-                    ),
-
-                    const SizedBox(width: 16),
-
-                    /// Text
-                    Expanded(
-                      child: Text(
-                        'Add another card',
-                        style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 16, fontWeight: FontWeight.w500, fontFamily: GoogleFonts.montserrat().fontFamily),
+                      height: 48,
+                      width: 48,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryNeon.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(
+                        Icons.add,
+                        color: AppColors.primaryNeon,
+                        size: 24,
                       ),
                     ),
-
-                    /// Arrow
-                    Icon(Icons.chevron_right, color: Colors.white.withOpacity(0.6), size: 26),
+                    const Gap(16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Add New Source',
+                            style: GoogleFonts.montserrat(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'Debit, Credit or Cash',
+                            style: GoogleFonts.montserrat(
+                              color: Colors.white38,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right, color: Colors.white24),
                   ],
                 ),
               ),
             ),
+            const Gap(20),
           ],
         ),
       ),

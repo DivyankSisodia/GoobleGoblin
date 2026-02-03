@@ -3,14 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/app_images.dart';
-import '../../../core/colors.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/currency_utils.dart';
 import '../../../core/models/card.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/payment.dart';
-import '../../category/provider/category_provider.dart';
-import '../../payment/provider/transcation_provider.dart';
-import '../provider/cards_provider.dart';
+import '../../../core/app_images.dart';
+import '../../../providers/providers.dart';
 import 'custom_segmented_tab_bar.dart';
 
 class CustomTabWidget extends ConsumerStatefulWidget {
@@ -26,15 +25,26 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final payments = ref.watch(transactionProvider);
-    final cards = ref.watch(cardsProvider);
-    final categories = ref.watch(categoryProvider);
+    final payments = ref.watch(paymentsProvider).payments;
+    final cards = ref.watch(cardsProvider).cards;
+    final categories = ref.watch(categoriesProvider).categories;
 
     return Column(
       children: [
-        CustomSegmentedTabBar(tabs: tabs, selectedIndex: selectedIndex, onChanged: (index) => setState(() => selectedIndex = index)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: CustomSegmentedTabBar(
+            tabs: tabs,
+            selectedIndex: selectedIndex,
+            onChanged: (index) => setState(() => selectedIndex = index),
+          ),
+        ),
         const Gap(24),
-        _buildTabContent(payments: payments, cards: cards, categories: categories),
+        _buildTabContent(
+          payments: payments,
+          cards: cards,
+          categories: categories,
+        ),
         const Gap(20),
       ],
     );
@@ -42,10 +52,14 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
 
   // ---------------- TAB SWITCH ----------------
 
-  Widget _buildTabContent({required List<Payment> payments, required List<BankCard> cards, required List<Category> categories}) {
+  Widget _buildTabContent({
+    required List<Payment> payments,
+    required List<BankCard> cards,
+    required List<Category> categories,
+  }) {
     switch (selectedIndex) {
       case 0:
-        return _transactionsTab(payments, cards, categories);
+        return _transactionsTab(payments);
       case 1:
         return _cardsTab(cards);
       case 2:
@@ -57,24 +71,30 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
 
   // ---------------- TRANSACTIONS ----------------
 
-  Widget _transactionsTab(List<Payment> payments, List<BankCard> cards, List<Category> categories) {
+  Widget _transactionsTab(List<Payment> payments) {
     if (payments.isEmpty) return _emptyState('No transactions yet');
 
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: payments.length,
+      itemCount: payments.length > 10
+          ? 10
+          : payments.length, // Show only recent 10
       separatorBuilder: (_, __) => const Gap(12),
       itemBuilder: (_, index) {
         final payment = payments[index];
+        final category = payment.category;
 
         return _itemTile(
-          title: _categoryLabel(payment.categoryId, categories),
-          subtitle: _cardName(payment.cardId, cards),
-          amount: '₹ ${payment.amount.toStringAsFixed(0)}',
+          title: category?.label ?? 'Other',
+          subtitle: payment.note?.isNotEmpty == true
+              ? payment.note!
+              : 'Payment',
+          amount: CurrencyUtils.format(payment.amount),
           highlight: false,
-          icon: _categoryIcon(payment.categoryId, categories),
+          iconPath: category?.assetPath,
+          categoryIcon: category?.icon,
         );
       },
     );
@@ -83,7 +103,7 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
   // ---------------- CARDS ----------------
 
   Widget _cardsTab(List<BankCard> cards) {
-    if (cards.isEmpty) return _emptyState('No cards added');
+    if (cards.isEmpty) return _emptyState('No sources added');
 
     return ListView.separated(
       shrinkWrap: true,
@@ -94,104 +114,186 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
       itemBuilder: (_, index) {
         final card = cards[index];
 
-        return _itemTile(title: card.bankName, subtitle: card.isPrimary ? 'Primary Card' : card.type, amount: '₹ ${card.balance.toStringAsFixed(0)}', highlight: card.isPrimary, icon: card.type == 'Debit' ? AppImages.debitCard : AppImages.creditCard);
+        String icon = AppImages.debitCard;
+        if (card.isCredit) icon = AppImages.creditCard;
+        if (card.isCash) icon = AppImages.cash;
+
+        return _itemTile(
+          title: card.bankName,
+          subtitle: card.accountType.displayName,
+          amount: CurrencyUtils.format(card.displayBalance),
+          highlight: card.isPrimary,
+          iconPath: icon,
+          progress: card.isCredit ? card.creditUsagePercentage : null,
+          progressColor: card.isCredit
+              ? _getCreditColor(card.creditUsagePercentage)
+              : null,
+        );
       },
     );
   }
 
+  Color _getCreditColor(double percentage) {
+    if (percentage < 0.5) return AppColors.successGreen;
+    if (percentage < 0.75) return AppColors.warningYellow;
+    return AppColors.errorRed;
+  }
+
+  // ---------------- CATEGORIES ----------------
+
   Widget _categoriesTab(List<Category> categories, List<Payment> payments) {
-    if (categories.isEmpty) return _emptyState('No categories added');
+    if (categories.isEmpty) return _emptyState('No categories');
+
+    // Filter categories that have spending
+    final spentCategories = categories.where((cat) {
+      return payments.any((p) => p.categoryId == cat.id);
+    }).toList();
+
+    if (spentCategories.isEmpty)
+      return _emptyState('No spending by category yet');
 
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: categories.length,
+      itemCount: spentCategories.length,
       separatorBuilder: (_, __) => const Gap(12),
       itemBuilder: (_, index) {
-        final category = categories[index];
+        final category = spentCategories[index];
+        final relatedPayments = payments
+            .where((p) => p.categoryId == category.id)
+            .toList();
+        final totalAmount = relatedPayments.fold<double>(
+          0,
+          (sum, p) => sum + p.amount,
+        );
 
-        final relatedPayments = payments.where((p) => p.categoryId == category.id).toList();
-
-        final totalAmount = relatedPayments.fold<double>(0, (sum, p) => sum + p.amount);
-
-        return _itemTile(title: category.label, subtitle: '${relatedPayments.length} transactions', amount: '₹ ${totalAmount.toStringAsFixed(0)}', highlight: false, icon: category.icon);
+        return _itemTile(
+          title: category.label,
+          subtitle: '${relatedPayments.length} transactions',
+          amount: CurrencyUtils.format(totalAmount),
+          highlight: false,
+          iconPath: category.assetPath,
+          categoryIcon: category.icon,
+        );
       },
     );
   }
 
   // ---------------- TILE ----------------
 
-  Widget _itemTile({required String title, required String subtitle, required String amount, required bool highlight, String? icon}) {
+  Widget _itemTile({
+    required String title,
+    required String subtitle,
+    required String amount,
+    required bool highlight,
+    String? iconPath,
+    String? categoryIcon,
+    double? progress,
+    Color? progressColor,
+  }) {
+    final themeColor = PredefinedCategories.getColor(categoryIcon);
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceLight.withOpacity(0.3),
-        gradient: highlight ? AppColors.progressGradient : null,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: highlight ? AppColors.primaryNeon : Colors.white.withOpacity(0.05)),
+        color: AppColors.surfaceLight.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: highlight
+              ? AppColors.primaryNeon.withValues(alpha: 0.5)
+              : Colors.white.withValues(alpha: 0.05),
+        ),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            height: 48,
-            width: 48,
-            decoration: BoxDecoration(color: AppColors.background, shape: BoxShape.circle),
-            padding: const EdgeInsets.all(10),
-            child: Image.asset(icon ?? AppImages.bagShopping, color: AppColors.textPrimary, colorBlendMode: BlendMode.srcIn),
+          Row(
+            children: [
+              Container(
+                height: 48,
+                width: 48,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: iconPath != null
+                    ? Image.asset(iconPath)
+                    : Icon(
+                        Icons.category_outlined,
+                        color: themeColor,
+                        size: 20,
+                      ),
+              ),
+              const Gap(16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: GoogleFonts.montserrat(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: GoogleFonts.montserrat(
+                        color: Colors.white60,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                amount,
+                style: GoogleFonts.montserrat(
+                  color: highlight ? AppColors.primaryNeon : Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
-          const Gap(16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: _titleStyle),
-                Text(subtitle, style: _subtitleStyle),
-              ],
+          if (progress != null) ...[
+            const Gap(12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                backgroundColor: AppColors.background,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  progressColor ?? AppColors.primaryNeon,
+                ),
+                minHeight: 4,
+              ),
             ),
-          ),
-          Text(
-            amount,
-            style: TextStyle(color: highlight ? AppColors.primaryNeon : Colors.white, fontSize: 16, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
-          ),
+          ],
         ],
       ),
     );
   }
 
-  // ---------------- HELPERS ----------------
-
-  String _categoryLabel(int id, List<Category> categories) {
-    try {
-      return categories.firstWhere((c) => c.id == id).label;
-    } catch (_) {
-      return 'Unknown';
-    }
-  }
-
-  String? _categoryIcon(int id, List<Category> categories) {
-    try {
-      return categories.firstWhere((c) => c.id == id).icon;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  String _cardName(int id, List<BankCard> cards) {
-    try {
-      return cards.firstWhere((c) => c.id == id).bankName;
-    } catch (_) {
-      return 'Unknown';
-    }
-  }
-
   Widget _emptyState(String text) {
     return Padding(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(48),
       child: Center(
-        child: Text(
-          text,
-          style: TextStyle(color: Colors.white54, fontFamily: GoogleFonts.montserrat().fontFamily),
+        child: Column(
+          children: [
+            Icon(Icons.inbox_rounded, color: AppColors.surfaceLight, size: 48),
+            const Gap(16),
+            Text(
+              text,
+              style: GoogleFonts.montserrat(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -200,6 +302,15 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
 
 // ---------------- STYLES ----------------
 
-final _titleStyle = TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily);
+final _titleStyle = TextStyle(
+  color: Colors.white,
+  fontSize: 16,
+  fontWeight: FontWeight.bold,
+  fontFamily: GoogleFonts.montserrat().fontFamily,
+);
 
-final _subtitleStyle = TextStyle(color: Colors.white54, fontSize: 12, fontFamily: GoogleFonts.montserrat().fontFamily);
+final _subtitleStyle = TextStyle(
+  color: Colors.white54,
+  fontSize: 12,
+  fontFamily: GoogleFonts.montserrat().fontFamily,
+);

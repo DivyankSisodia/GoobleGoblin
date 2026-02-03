@@ -2,88 +2,136 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
-import 'package:gooble_goblin/features/home/provider/cards_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/colors.dart';
-import '../../../core/models/card.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/currency_utils.dart';
+import '../../../providers/providers.dart';
 
 class TotalBalanceWidget extends ConsumerWidget {
-  const TotalBalanceWidget({
-    super.key,
-  });
+  const TotalBalanceWidget({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final BankCard? primaryCard = ref.watch(primaryCardProvider);
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 24.0, right: 16.0, top: 16.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Total Balance',
-                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w400, fontFamily: GoogleFonts.montserrat().fontFamily),
-              ),
-              IconButton(
-                onPressed: () {},
-                icon: Icon(CupertinoIcons.eye_slash, color: Colors.white, size: 24),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(left: 24.0),
-          child: Align(
-            alignment: Alignment.topLeft,
-            child: Text(
-              primaryCard != null
-                  ? '₹ ${primaryCard.balance.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}'
-                  : '₹ 00,000',
-              style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
+    final totalBalance = ref.watch(totalBalanceProvider);
+    final analyticsState = ref.watch(analyticsProvider);
+
+    // Calculate trend from analytics if available
+    final trendValue = analyticsState.analytics?.totalSpending ?? 0;
+    final isPositive = trendValue >= 0;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 24.0, right: 16.0, top: 16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Total Balance',
+                  style: GoogleFonts.montserrat(
+                    color: Colors.white70,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                IconButton(
+                  onPressed: () {
+                    // Toggle visibility logic could go here
+                  },
+                  icon: const Icon(
+                    CupertinoIcons.eye,
+                    color: Colors.white54,
+                    size: 20,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
             ),
           ),
-        ),
-        Gap(16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.primaryNeonDark),
-                  borderRadius: BorderRadius.circular(16),
-                  color: Colors.transparent
+          Padding(
+            padding: const EdgeInsets.only(left: 24.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  CurrencyUtils.format(totalBalance),
+                  style: GoogleFonts.montserrat(
+                    color: Colors.white,
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                child: Row(
-                  children: [
-                    Icon(Icons.trending_up, color: AppColors.primaryNeonDark, size: 14),
-                    Gap(8),
-                    Text(
-                      primaryCard != null ? '₹ ${primaryCard.balance.toString().replaceAllMapped(RegExp(r'\(\d{1,3}\)(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}' : '+450\$ (3.2%)',
-                      style: TextStyle(
-                        color: AppColors.primaryNeonDark,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: GoogleFonts.montserrat().fontFamily,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Gap(16),
-              Text(
-                'vs Last Month',
-                style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        Gap(16),
-      ],
+          const Gap(16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color:
+                        (isPositive
+                                ? AppColors.successGreen
+                                : AppColors.errorRed)
+                            .withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color:
+                          (isPositive
+                                  ? AppColors.successGreen
+                                  : AppColors.errorRed)
+                              .withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isPositive ? Icons.trending_up : Icons.trending_down,
+                        color: isPositive
+                            ? AppColors.successGreen
+                            : AppColors.errorRed,
+                        size: 14,
+                      ),
+                      const Gap(6),
+                      Text(
+                        'This Month',
+                        style: GoogleFonts.montserrat(
+                          color: isPositive
+                              ? AppColors.successGreen
+                              : AppColors.errorRed,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Gap(12),
+                Text(
+                  'Spent ${CurrencyUtils.formatCompact(trendValue)}',
+                  style: GoogleFonts.montserrat(
+                    color: Colors.white54,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Gap(16),
+        ],
+      ),
     );
   }
 }

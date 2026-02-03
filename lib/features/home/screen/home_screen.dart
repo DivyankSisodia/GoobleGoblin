@@ -2,62 +2,24 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
-import 'package:gooble_goblin/core/colors.dart';
-import 'package:gooble_goblin/features/home/widget/custom_tab_widget.dart';
-import 'package:gooble_goblin/utils/add_card_bottomsheet.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../category/provider/category_provider.dart';
-import '../../payment/provider/transcation_provider.dart';
+
+import '../../../core/theme/app_theme.dart';
+import '../../../providers/providers.dart';
+import '../../../utils/add_card_bottomsheet.dart';
+import '../widget/custom_tab_widget.dart';
 import '../widget/monthly_budget_widget.dart';
 import '../widget/total_balance_widget.dart';
 import '../widget/upcoming_payment_widget.dart';
 
-class HomeScreen extends ConsumerStatefulWidget {
+class HomeScreen extends ConsumerWidget {
   final bool isFirstTime;
   const HomeScreen({super.key, this.isFirstTime = false});
 
   @override
-  ConsumerState<HomeScreen> createState() => _HomeScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final recurringPayments = ref.watch(recurringPaymentsProvider);
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
-  @override
-  void initState() {
-    super.initState();
-
-    if (!widget.isFirstTime) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        // await Future.wait<void>([
-        //   ref.read(transactionProvider.notifier).fetchPayments(),
-        //   ref.read(categoryProvider.notifier).loadCategories(),
-        // ]);
-
-        // final payments = ref.read(transactionProvider);
-        // final categories = ref.read(categoryProvider);
-        // print(payments);
-        // print(categories);
-
-        // Future.delayed(const Duration(seconds: 1), () {
-        //   if (mounted) {
-        //     AppBottomSheet.showAddCardBottomSheet(context, ref);
-        //   }
-        // });
-      });
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await Future.wait([ref.read(transactionProvider.notifier).fetchPayments(), ref.read(categoryProvider.notifier).loadCategories()]);
-
-      final payments = ref.read(transactionProvider);
-      final categories = ref.read(categoryProvider);
-
-      debugPrint(payments.toString());
-      debugPrint(categories.toString());
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -68,12 +30,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: Container(
             height: 42,
             width: 42,
-            decoration: const BoxDecoration(color: AppColors.primaryNeon, shape: BoxShape.circle),
+            decoration: const BoxDecoration(
+              color: AppColors.primaryNeon,
+              shape: BoxShape.circle,
+            ),
             child: IconButton(
               padding: EdgeInsets.zero,
               iconSize: 24,
               icon: const Icon(CupertinoIcons.chart_bar, color: Colors.black),
-              onPressed: () {},
+              onPressed: () {
+                // Potential shortcut to Analytics or hidden Dev Tools
+              },
             ),
           ),
         ),
@@ -83,11 +50,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           children: [
             Text(
               "Gooble Goblin",
-              style: TextStyle(color: AppColors.primaryNeon, fontSize: 24, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
+              style: GoogleFonts.montserrat(
+                color: AppColors.primaryNeon,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             Text(
-              "Hello Divyank",
-              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
+              "Your Personal Finance",
+              style: GoogleFonts.montserrat(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -95,22 +70,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           Container(
             height: 42,
             width: 42,
-            decoration: const BoxDecoration(color: AppColors.primaryNeon, shape: BoxShape.circle),
+            decoration: const BoxDecoration(
+              color: AppColors.primaryNeon,
+              shape: BoxShape.circle,
+            ),
             child: IconButton(
               onPressed: () {
-                // TODO: implement notification
-                // NotificationService notifi = NotificationService.instance;
-                // notifi.scheduleNotification(
-                //   title: 'Notification',
-                //   body: 'This is a notification',
-                //   id: 1,
-                //   scheduledDate: DateTime.now().add(const Duration(seconds: 10)),
-                // );
+                // Profile or hidden settings shortcut
               },
-              icon: Icon(CupertinoIcons.person, color: Colors.black, size: 24),
+              icon: const Icon(
+                CupertinoIcons.person,
+                color: Colors.black,
+                size: 24,
+              ),
             ),
           ),
-          Gap(20),
+          const Gap(20),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -122,74 +97,103 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: const Icon(Icons.add, color: Colors.black, size: 32),
       ),
       floatingActionButtonAnimator: FloatingActionButtonAnimator.scaling,
-      // Matching AppColors.background
-      body: SingleChildScrollView(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Gap(30),
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              width: double.infinity,
-              decoration: BoxDecoration(color: AppColors.surfaceLight.withOpacity(0.8), borderRadius: BorderRadius.circular(16)),
-              child: TotalBalanceWidget(),
-            ),
-            Gap(20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              width: double.infinity,
-              decoration: BoxDecoration(color: AppColors.surfaceLight.withOpacity(0.8), borderRadius: BorderRadius.circular(16)),
-              child: MonthlyBudgetWidget(),
-            ),
-            Gap(24),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Upcoming Payments',
-                    style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await ref.read(paymentsProvider.notifier).loadPayments();
+          await ref.read(cardsProvider.notifier).loadCards();
+        },
+        color: AppColors.primaryNeon,
+        backgroundColor: AppColors.surface,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Gap(20),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: AppColors.primaryNeon.withValues(alpha: 0.1),
                   ),
-                  Text(
-                    'See All',
-                    style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600, fontFamily: GoogleFonts.montserrat().fontFamily),
-                  ),
-                ],
-              ),
-            ),
-            const Gap(16),
-            ref
-                .watch(recurringPaymentsProvider)
-                .when(
-                  data: (payments) {
-                    if (payments.isEmpty) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text("No upcoming payments", style: TextStyle(color: Colors.white.withOpacity(0.5))),
-                      );
-                    }
-                    // For debugging, print as JSON once
-                    debugPrint('Upcoming Payments Loaded: ${payments.length}');
-                    for (var p in payments) {
-                      print(p.toMap());
-                    }
-
-                    return SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(children: payments.map((p) => UpcomingPaymentWidget(payment: p)).toList()),
-                    );
-                  },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (e, s) => Center(child: Text('Error: $e')),
                 ),
-            const Gap(32),
-            CustomTabWidget(),
-            Gap(24),
-          ],
+                child: const TotalBalanceWidget(),
+              ),
+              const Gap(20),
+              Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: AppColors.primaryNeon.withValues(alpha: 0.1),
+                  ),
+                ),
+                child: const MonthlyBudgetWidget(),
+              ),
+              const Gap(24),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Upcoming Payments',
+                      style: GoogleFonts.montserrat(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      'See All',
+                      style: GoogleFonts.montserrat(
+                        color: AppColors.primaryNeon,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Gap(16),
+
+              // Upcoming payments with new list-based provider
+              if (recurringPayments.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Center(
+                    child: Text(
+                      "No upcoming payments",
+                      style: GoogleFonts.montserrat(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: recurringPayments
+                        .map((p) => UpcomingPaymentWidget(payment: p))
+                        .toList(),
+                  ),
+                ),
+
+              const Gap(32),
+              const CustomTabWidget(),
+              const Gap(24),
+            ],
+          ),
         ),
       ),
     );

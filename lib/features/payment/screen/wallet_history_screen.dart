@@ -3,74 +3,39 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 
-import '../../../core/colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/models/payment.dart';
 import '../../../core/models/category.dart';
-import '../../../core/models/card.dart';
-import '../../category/provider/category_provider.dart';
-import '../../home/provider/cards_provider.dart';
-import '../provider/transcation_provider.dart';
+import '../../../core/utils/currency_utils.dart';
+import '../../../core/utils/date_utils.dart';
+import '../../../providers/providers.dart';
 import '../../main_screen.dart';
-import '../../../utils/toast_notification.dart';
 
 class WalletHistoryScreen extends ConsumerStatefulWidget {
   const WalletHistoryScreen({super.key});
 
   @override
-  ConsumerState<WalletHistoryScreen> createState() => _WalletHistoryScreenState();
+  ConsumerState<WalletHistoryScreen> createState() =>
+      _WalletHistoryScreenState();
 }
 
 class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
-  String _searchQuery = '';
-  String _selectedTab = 'All';
-  final List<String> _tabs = ['All', 'Income', 'Expense', 'Pending'];
+  final List<String> _tabs = ['All', 'Recurring', 'Recent'];
+  int _selectedTabIndex = 0;
 
   @override
   Widget build(BuildContext context) {
-    final payments = ref.watch(transactionProvider);
-    final categories = ref.watch(categoryProvider);
-    final cards = ref.watch(cardsProvider);
-
-    // Filter payments based on search query and tab
-    List<Payment> filteredPayments = payments.where((payment) {
-      final category = categories.firstWhere(
-        (c) => c.id == payment.categoryId,
-        orElse: () => Category(label: 'General', icon: ''),
-      );
-
-      final noteMatch = payment.note?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false;
-      final categoryMatch = category.label.toLowerCase().contains(_searchQuery.toLowerCase());
-      final matchesSearch = _searchQuery.isEmpty || noteMatch || categoryMatch;
-
-      if (!matchesSearch) return false;
-
-      // Tab filtering logic
-      if (_selectedTab == 'All') return true;
-      if (_selectedTab == 'Pending') return payment.isRecurring;
-
-      // Heuristic for Income/Expense based on category label or note
-      bool isIncome = category.label.toLowerCase().contains('income') || category.label.toLowerCase().contains('salary') || (payment.note?.toLowerCase().contains('salary') ?? false) || (payment.note?.toLowerCase().contains('deposit') ?? false);
-
-      if (_selectedTab == 'Income') return isIncome;
-      if (_selectedTab == 'Expense') return !isIncome && !payment.isRecurring;
-
-      return true;
-    }).toList();
-
-    // Group by date
-    Map<String, List<Payment>> groupedPayments = {};
-    for (var payment in filteredPayments) {
-      final date = payment.date; // "yyyy-MM-dd"
-      if (groupedPayments[date] == null) {
-        groupedPayments[date] = [];
-      }
-      groupedPayments[date]!.add(payment);
-    }
+    final paymentsState = ref.watch(paymentsProvider);
+    final paymentsByDate = paymentsState.paymentsByDate;
+    final sortedDates = paymentsByDate.keys.toList();
 
     // Sort dates descending
-    List<String> sortedDates = groupedPayments.keys.toList()..sort((a, b) => b.compareTo(a));
+    sortedDates.sort((a, b) {
+      final dateA = AppDateUtils.parseIso(a) ?? DateTime.now();
+      final dateB = AppDateUtils.parseIso(b) ?? DateTime.now();
+      return dateB.compareTo(dateA);
+    });
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -81,15 +46,24 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
             _buildSearchBar(),
             _buildTabs(),
             Expanded(
-              child: filteredPayments.isEmpty
+              child: paymentsState.isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.primaryNeon,
+                      ),
+                    )
+                  : paymentsState.payments.isEmpty
                   ? _buildEmptyState()
                   : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       itemCount: sortedDates.length,
                       itemBuilder: (context, index) {
-                        final date = sortedDates[index];
-                        final paymentsForDate = groupedPayments[date]!;
-                        return _buildDateGroup(date, paymentsForDate, categories, cards);
+                        final dateKey = sortedDates[index];
+                        final paymentsForDate = paymentsByDate[dateKey]!;
+                        return _buildDateGroup(dateKey, paymentsForDate);
                       },
                     ),
             ),
@@ -112,43 +86,74 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
             icon: const Icon(CupertinoIcons.back, color: Colors.white),
           ),
           Text(
-            'Wallet History',
-            style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
+            'History',
+            style: GoogleFonts.montserrat(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          IconButton(
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  backgroundColor: const Color(0xFF1E1B29),
-                  title: const Text('Delete All Data', style: TextStyle(color: Colors.white)),
-                  content: const Text('Are you sure you want to delete all data? This action cannot be undone.', style: TextStyle(color: Colors.grey)),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-                    ),
-                    TextButton(
-                      onPressed: () async {
-                        Navigator.pop(context);
-                        await ref.read(transactionProvider.notifier).clearAllData();
-                        if (context.mounted) {
-                          AppToasts.showSuccessToast(context, title: 'Data Deleted Successfully');
-                        }
-                      },
-                      child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                    ),
-                  ],
+          Row(
+            children: [
+              IconButton(
+                onPressed: () => _confirmDeleteAll(),
+                icon: const Icon(
+                  CupertinoIcons.trash,
+                  color: AppColors.errorRed,
                 ),
-              );
-            },
-            icon: const Icon(CupertinoIcons.trash, color: Color(0xFFFF4B4B)),
+              ),
+              IconButton(
+                onPressed: () {},
+                icon: const Icon(
+                  CupertinoIcons.share,
+                  color: AppColors.primaryNeon,
+                ),
+              ),
+            ],
           ),
-          IconButton(
-            onPressed: () {
-              
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteAll() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          'Wipe Everything?',
+          style: GoogleFonts.montserrat(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          'This will delete all your cards, payments, and budgets. You\'ll start fresh.',
+          style: GoogleFonts.montserrat(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Keep Data',
+              style: GoogleFonts.montserrat(color: Colors.white),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await ref.read(paymentsProvider.notifier).deleteAllPayments();
+              // Re-onboard if needed
             },
-            icon: const Icon(CupertinoIcons.share, color: Color(0xFFFF00FF)),
+            child: Text(
+              'Delete',
+              style: GoogleFonts.montserrat(
+                color: AppColors.errorRed,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -162,9 +167,9 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
         height: 55,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1B29),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.05)),
+          color: AppColors.surfaceLight.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
         ),
         child: Row(
           children: [
@@ -172,16 +177,19 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
             const Gap(12),
             Expanded(
               child: TextField(
-                onChanged: (value) => setState(() => _searchQuery = value),
-                style: TextStyle(color: Colors.white, fontFamily: GoogleFonts.montserrat().fontFamily),
-                decoration: const InputDecoration(
-                  hintText: 'Search transactions...',
-                  hintStyle: TextStyle(color: Colors.grey),
+                onChanged: (value) =>
+                    ref.read(paymentsProvider.notifier).setSearchQuery(value),
+                style: GoogleFonts.montserrat(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Search for anything...',
+                  hintStyle: GoogleFonts.montserrat(
+                    color: Colors.grey,
+                    fontSize: 14,
+                  ),
                   border: InputBorder.none,
                 ),
               ),
             ),
-            Icon(Icons.tune, color: Colors.white.withOpacity(0.5), size: 20),
           ],
         ),
       ),
@@ -192,7 +200,7 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: SizedBox(
-        height: 40,
+        height: 44,
         child: ListView.separated(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           scrollDirection: Axis.horizontal,
@@ -200,21 +208,35 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
           separatorBuilder: (_, __) => const Gap(12),
           itemBuilder: (context, index) {
             final tab = _tabs[index];
-            final isSelected = _selectedTab == tab;
+            final isSelected = _selectedTabIndex == index;
             return GestureDetector(
-              onTap: () => setState(() => _selectedTab = tab),
-              child: Container(
+              onTap: () => setState(() => _selectedTabIndex = index),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 decoration: BoxDecoration(
-                  gradient: isSelected ? const LinearGradient(colors: [Color(0xFFFF00FF), Color(0xFFE91E63)]) : null,
-                  color: isSelected ? null : const Color(0xFF1E1B29),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: isSelected ? [BoxShadow(color: const Color(0xFFFF00FF).withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))] : [],
+                  color: isSelected
+                      ? AppColors.primaryNeon
+                      : AppColors.surfaceLight.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primaryNeon.withValues(alpha: 0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ]
+                      : [],
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   tab,
-                  style: TextStyle(color: isSelected ? Colors.white : Colors.grey[400], fontWeight: isSelected ? FontWeight.bold : FontWeight.w500, fontSize: 14, fontFamily: GoogleFonts.montserrat().fontFamily),
+                  style: GoogleFonts.montserrat(
+                    color: isSelected ? Colors.black : Colors.white70,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             );
@@ -224,97 +246,75 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
     );
   }
 
-  Widget _buildDateGroup(String date, List<Payment> payments, List<Category> categories, List<BankCard> cards) {
-    final now = DateTime.now();
-    final today = DateFormat('yyyy-MM-dd').format(now);
-    final yesterday = DateFormat('yyyy-MM-dd').format(now.subtract(const Duration(days: 1)));
+  Widget _buildDateGroup(String dateKey, List<Payment> payments) {
+    final date = AppDateUtils.parseIso(dateKey) ?? DateTime.now();
+    final dateLabel = AppDateUtils.isToday(date)
+        ? 'Today'
+        : (AppDateUtils.isToday(date.add(const Duration(days: 1)))
+              ? 'Yesterday'
+              : AppDateUtils.formatDisplay(date));
 
-    DateTime parsedDate = DateTime.parse(date);
-    String dateLabel;
-    if (date == today) {
-      dateLabel = 'Today, ${DateFormat('MMM dd').format(parsedDate)}';
-    } else if (date == yesterday) {
-      dateLabel = 'Yesterday, ${DateFormat('MMM dd').format(parsedDate)}';
-    } else {
-      dateLabel = DateFormat('EEEE, MMM dd').format(parsedDate);
-    }
-
-    double dailyTotal = payments.fold(0, (sum, p) {
-      final cat = categories.firstWhere(
-        (c) => c.id == p.categoryId,
-        orElse: () => Category(label: '', icon: ''),
-      );
-      bool isIncome = cat.label.toLowerCase().contains('income') || cat.label.toLowerCase().contains('salary') || (p.note?.toLowerCase().contains('salary') ?? false);
-      return sum + (isIncome ? p.amount : -p.amount);
-    });
+    final groupTotal = payments.fold<double>(0, (sum, p) => sum + p.amount);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(top: 8, bottom: 12, left: 4, right: 4),
+          padding: const EdgeInsets.fromLTRB(8, 16, 8, 12),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 dateLabel,
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
+                style: GoogleFonts.montserrat(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               Text(
-                'DAILY TOTAL: ${dailyTotal >= 0 ? '+' : '-'}\$${dailyTotal.abs().toStringAsFixed(2)}',
-                style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5, fontFamily: GoogleFonts.montserrat().fontFamily),
+                'TOTAL: ${CurrencyUtils.format(groupTotal)}',
+                style: GoogleFonts.montserrat(
+                  color: Colors.white38,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                ),
               ),
             ],
           ),
         ),
-        ...payments.map((p) => _buildTransactionTile(p, categories, cards)),
-        const Gap(16),
+        ...payments.map((p) => _buildTransactionTile(p)),
+        const Gap(8),
       ],
     );
   }
 
-  Widget _buildTransactionTile(Payment payment, List<Category> categories, List<BankCard> cards) {
-    final category = categories.firstWhere(
-      (c) => c.id == payment.categoryId,
-      orElse: () => Category(label: 'Unknown', icon: ''),
-    );
-    final card = cards.firstWhere(
-      (c) => c.id == payment.cardId,
-      orElse: () => BankCard(bankName: 'Card', balance: 0, date: '', type: 'Debit'),
-    );
-
-    bool isIncome = category.label.toLowerCase().contains('income') || category.label.toLowerCase().contains('salary') || (payment.note?.toLowerCase().contains('salary') ?? false);
+  Widget _buildTransactionTile(Payment payment) {
+    final cat = payment.category;
+    final categoryColor = PredefinedCategories.getColor(cat?.icon);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1B29),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withOpacity(0.03)),
+        color: AppColors.surfaceLight.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.03)),
       ),
       child: Row(
         children: [
-          Stack(
-            alignment: Alignment.bottomRight,
-            children: [
-              Container(
-                height: 52,
-                width: 52,
-                decoration: const BoxDecoration(color: Color(0xFF2A263D), shape: BoxShape.circle),
-                padding: const EdgeInsets.all(12),
-                child: category.icon.isNotEmpty ? (category.icon.endsWith('.png') ? Image.asset(category.icon, color: Colors.white, colorBlendMode: BlendMode.srcIn) : const Icon(Icons.category, color: Colors.white)) : const Icon(Icons.category, color: Colors.white),
-              ),
-              Container(
-                height: 12,
-                width: 12,
-                decoration: BoxDecoration(
-                  color: isIncome ? const Color(0xFF00FF9D) : Colors.orangeAccent,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF1E1B29), width: 2),
-                ),
-              ),
-            ],
+          Container(
+            height: 52,
+            width: 52,
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            padding: const EdgeInsets.all(12),
+            child: cat?.assetPath != null
+                ? Image.asset(cat!.assetPath!)
+                : Icon(Icons.payment, color: categoryColor, size: 24),
           ),
           const Gap(16),
           Expanded(
@@ -322,19 +322,24 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  payment.note != null && payment.note!.isNotEmpty ? payment.note! : category.label,
-                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
+                  payment.note?.isNotEmpty == true
+                      ? payment.note!
+                      : (cat?.label ?? 'Expense'),
+                  style: GoogleFonts.montserrat(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const Gap(4),
-                Row(
-                  children: [
-                    Icon(card.isCredit ? Icons.credit_card : Icons.credit_card_outlined, size: 14, color: Colors.grey),
-                    const Gap(6),
-                    Text(
-                      '${card.bankName} •••• ${card.id.toString().padLeft(4, '0')}',
-                      style: TextStyle(color: Colors.grey, fontSize: 12, fontFamily: GoogleFonts.montserrat().fontFamily),
-                    ),
-                  ],
+                Text(
+                  cat?.label ?? 'Other',
+                  style: GoogleFonts.montserrat(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
@@ -343,14 +348,33 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${isIncome ? '+' : '-'}\$${payment.amount.toStringAsFixed(2)}',
-                style: TextStyle(color: isIncome ? const Color(0xFF00FF9D) : const Color(0xFFFF4B4B), fontSize: 17, fontWeight: FontWeight.bold, fontFamily: GoogleFonts.montserrat().fontFamily),
+                CurrencyUtils.format(payment.amount),
+                style: GoogleFonts.montserrat(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              const Gap(4),
-              Text(
-                payment.createdAt != null ? DateFormat('hh:mm a').format(DateTime.parse(payment.createdAt!)) : DateFormat('hh:mm a').format(DateTime.now()),
-                style: TextStyle(color: Colors.grey.withOpacity(0.6), fontSize: 10, fontWeight: FontWeight.w500, fontFamily: GoogleFonts.montserrat().fontFamily),
-              ),
+              if (payment.isRecurring)
+                Container(
+                  margin: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryNeon.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'RECURRING',
+                    style: GoogleFonts.montserrat(
+                      color: AppColors.primaryNeon,
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
             ],
           ),
         ],
@@ -363,11 +387,15 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(CupertinoIcons.doc_text_search, size: 64, color: Colors.white.withOpacity(0.1)),
-          const Gap(16),
+          Icon(CupertinoIcons.search, size: 64, color: AppColors.surfaceLight),
+          const Gap(24),
           Text(
-            'No transactions found',
-            style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 18, fontFamily: GoogleFonts.montserrat().fontFamily),
+            'Nothing found here',
+            style: GoogleFonts.montserrat(
+              color: AppColors.textSecondary,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),

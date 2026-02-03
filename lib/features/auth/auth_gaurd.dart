@@ -21,7 +21,6 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   late final LocalAuthentication auth;
-  bool _supportState = false;
 
   @override
   void initState() {
@@ -29,7 +28,6 @@ class _AuthScreenState extends State<AuthScreen> {
     auth = LocalAuthentication();
     auth.isDeviceSupported().then(
       (value) => setState(() {
-        _supportState = value;
       }),
     );
   }
@@ -42,7 +40,7 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> authenticate() async {
     try {
 
-      print("login state: ${auth.isDeviceSupported()}");
+      print("login state: ${await auth.isDeviceSupported()}");
 
       final bool didAuthenticate = await auth.authenticate(
         localizedReason: 'Please authenticate to show account balance',
