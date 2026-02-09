@@ -13,6 +13,8 @@ import '../../../providers/providers.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../main_screen.dart';
 import 'new_payment_screen.dart';
+import '../../wishlist/screen/wishlist_screen.dart';
+import '../../wishlist/screen/add_product_screen.dart';
 
 class WalletHistoryScreen extends ConsumerStatefulWidget {
   const WalletHistoryScreen({super.key});
@@ -23,7 +25,7 @@ class WalletHistoryScreen extends ConsumerStatefulWidget {
 }
 
 class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
-  final List<String> _tabs = ['All', 'Recurring', 'Recent'];
+  final List<String> _tabs = ['All', 'Recurring', 'Recent', 'Wishlist'];
   int _selectedTabIndex = 0;
 
   @override
@@ -48,7 +50,9 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
             _buildSearchBar(),
             _buildTabs(),
             Expanded(
-              child: paymentsState.isLoading
+              child: _selectedTabIndex == 3
+                  ? const WishlistScreen(showAppBar: false)
+                  : paymentsState.isLoading
                   ? const Center(
                       child: CircularProgressIndicator(
                         color: AppColors.primaryNeon,
@@ -72,6 +76,22 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
           ],
         ),
       ),
+      floatingActionButton: _selectedTabIndex == 3
+          ? FloatingActionButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const AddProductScreen(),
+                ),
+              ),
+              backgroundColor: AppColors.primaryNeon,
+              child: const Icon(
+                Icons.add_rounded,
+                color: Colors.black,
+                size: 32,
+              ),
+            )
+          : null,
     );
   }
 

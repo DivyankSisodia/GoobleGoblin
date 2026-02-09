@@ -8,6 +8,7 @@ import '../../main_screen.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/payment.dart';
+import '../../../core/models/wishlist_item.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../providers/providers.dart';
 import '../widgets/amount_widget.dart';
@@ -22,7 +23,8 @@ import '../../../core/errors/failures.dart';
 
 class NewPaymentScreen extends ConsumerStatefulWidget {
   final Payment? paymentToEdit;
-  const NewPaymentScreen({super.key, this.paymentToEdit});
+  final WishlistItem? fromWishlist;
+  const NewPaymentScreen({super.key, this.paymentToEdit, this.fromWishlist});
 
   @override
   ConsumerState<NewPaymentScreen> createState() => _NewPaymentScreenState();
@@ -56,21 +58,37 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
       _isRecurring = p.isRecurring;
       _selectedFrequency = p.frequency ?? 'Monthly';
       _isReminderEnabled = p.reminderNotification;
+    } else if (widget.fromWishlist != null) {
+      final item = widget.fromWishlist!;
+      if (item.price != null) {
+        _amountController.text = item.price!.toStringAsFixed(2);
+      }
+      _descriptionController.text =
+          'Purchased: ${item.title ?? "Wishlist item"}';
+
+      // Pre-select first category and primary card
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _preSelectDefaults();
+      });
     } else {
       // Pre-select first category if available
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        final categories = ref.read(categoriesProvider).categories;
-        if (categories.isNotEmpty) {
-          setState(() => _selectedCategoryId = categories.first.id);
-        }
-
-        final cards = ref.read(cardsProvider).cards;
-        if (cards.isNotEmpty) {
-          final primary =
-              cards.where((c) => c.isPrimary).firstOrNull ?? cards.first;
-          setState(() => _selectedCardId = primary.id);
-        }
+        _preSelectDefaults();
       });
+    }
+  }
+
+  void _preSelectDefaults() {
+    final categories = ref.read(categoriesProvider).categories;
+    if (categories.isNotEmpty) {
+      setState(() => _selectedCategoryId = categories.first.id);
+    }
+
+    final cards = ref.read(cardsProvider).cards;
+    if (cards.isNotEmpty) {
+      final primary =
+          cards.where((c) => c.isPrimary).firstOrNull ?? cards.first;
+      setState(() => _selectedCardId = primary.id);
     }
   }
 
@@ -183,6 +201,13 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
         } else if (finalId != null) {
           // Cancel if it was scheduled but now edited to past or disabled
           await NotificationService.instance.cancelNotification(finalId);
+        }
+
+        // Finalize wishlist item if originated from wishlist
+        if (widget.fromWishlist?.id != null) {
+          await ref
+              .read(wishlistProvider.notifier)
+              .markAsPurchased(widget.fromWishlist!.id!);
         }
 
         ScaffoldMessenger.of(context).showSnackBar(

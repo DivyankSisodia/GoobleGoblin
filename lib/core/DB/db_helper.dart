@@ -15,7 +15,7 @@ class DatabaseHelper {
   DatabaseHelper._init();
 
   /// Current database version
-  static const int _dbVersion = 4;
+  static const int _dbVersion = 5;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -105,6 +105,24 @@ class DatabaseHelper {
     if (oldVersion < 4) {
       await _migrateToVersion4(db);
     }
+
+    if (oldVersion < 5) {
+      await _migrateToVersion5(db);
+    }
+  }
+
+  /// Version 5 migration: Add wishlist table
+  Future<void> _migrateToVersion5(Database db) async {
+    await db.execute('''CREATE TABLE IF NOT EXISTS wishlist (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      url TEXT NOT NULL,
+      title TEXT,
+      image_url TEXT,
+      price REAL,
+      notes TEXT,
+      date_added TEXT NOT NULL,
+      is_purchased INTEGER DEFAULT 0
+    )''');
   }
 
   /// Version 4 migration: Add account types, credit limits, app settings
@@ -271,6 +289,18 @@ class DatabaseHelper {
       'CREATE INDEX idx_cards_accountType ON cards(accountType)',
     );
     await db.execute('CREATE INDEX idx_settings_key ON app_settings(key)');
+
+    // Wishlist table
+    await db.execute('''CREATE TABLE wishlist (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      url TEXT NOT NULL,
+      title TEXT,
+      image_url TEXT,
+      price REAL,
+      notes TEXT,
+      date_added TEXT NOT NULL,
+      is_purchased INTEGER DEFAULT 0
+    )''');
   }
 
   // ============================================================
@@ -806,6 +836,50 @@ class DatabaseHelper {
       ORDER BY total DESC
     ''',
       [start.toIso8601String(), end.toIso8601String()],
+    );
+  }
+
+  // ============================================================
+  // WISHLIST OPERATIONS
+  // ============================================================
+
+  /// Insert a wishlist item
+  Future<int> insertWishlistItem(Map<String, dynamic> item) async {
+    final db = await database;
+    return await db.insert('wishlist', item);
+  }
+
+  /// Get all wishlist items
+  Future<List<Map<String, dynamic>>> getAllWishlistItems() async {
+    final db = await database;
+    return await db.query('wishlist', orderBy: 'date_added DESC');
+  }
+
+  /// Update a wishlist item
+  Future<int> updateWishlistItem(Map<String, dynamic> item) async {
+    final db = await database;
+    return await db.update(
+      'wishlist',
+      item,
+      where: 'id = ?',
+      whereArgs: [item['id']],
+    );
+  }
+
+  /// Delete a wishlist item
+  Future<int> deleteWishlistItem(int id) async {
+    final db = await database;
+    return await db.delete('wishlist', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Mark wishlist item as purchased
+  Future<void> markWishlistAsPurchased(int id) async {
+    final db = await database;
+    await db.update(
+      'wishlist',
+      {'is_purchased': 1},
+      where: 'id = ?',
+      whereArgs: [id],
     );
   }
 

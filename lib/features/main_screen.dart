@@ -24,7 +24,7 @@ class MainScreen extends ConsumerWidget {
       CardsScreen(),
       const NewPaymentScreen(),
       const WalletHistoryScreen(),
-      const AnalyticsScreen(), // Replaced Settings with Analytics
+      const AnalyticsScreen(), 
     ];
 
     return Scaffold(
