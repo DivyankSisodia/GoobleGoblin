@@ -25,7 +25,7 @@ class WalletHistoryScreen extends ConsumerStatefulWidget {
 }
 
 class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
-  final List<String> _tabs = ['All', 'Recurring', 'Recent', 'Wishlist'];
+  final List<String> _tabs = ['All','Wishlist', 'Recurring', 'Recent', ];
   int _selectedTabIndex = 0;
 
   @override
@@ -50,7 +50,7 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
             _buildSearchBar(),
             _buildTabs(),
             Expanded(
-              child: _selectedTabIndex == 3
+              child: _selectedTabIndex == 1
                   ? const WishlistScreen(showAppBar: false)
                   : paymentsState.isLoading
                   ? const Center(
@@ -76,7 +76,7 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
           ],
         ),
       ),
-      floatingActionButton: _selectedTabIndex == 3
+      floatingActionButton: _selectedTabIndex == 1
           ? FloatingActionButton(
               onPressed: () => Navigator.push(
                 context,

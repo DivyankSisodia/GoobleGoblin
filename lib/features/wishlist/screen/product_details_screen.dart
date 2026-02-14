@@ -1,26 +1,30 @@
-import 'package:any_link_preview/any_link_preview.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/wishlist_item.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_utils.dart';
 import '../../../providers/providers.dart';
 import '../../payment/screen/new_payment_screen.dart';
+import 'webview_screen.dart';
 
 class ProductDetailsScreen extends ConsumerWidget {
   final WishlistItem item;
 
   const ProductDetailsScreen({super.key, required this.item});
 
-  Future<void> _launchUrl() async {
-    final url = Uri.parse(item.url);
-    if (!await launchUrl(url)) {
-      throw Exception('Could not launch $url');
-    }
+  void _openInWebView(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WebViewScreen(
+          url: item.url,
+          title: item.title ?? 'Product',
+        ),
+      ),
+    );
   }
 
   void _deleteItem(BuildContext context, WidgetRef ref) async {
@@ -68,7 +72,7 @@ class ProductDetailsScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildHeader(),
+                  _buildHeader(context),
                   const Gap(32),
                   if (item.notes != null && item.notes!.isNotEmpty) ...[
                     _buildSectionTitle('Notes'),
@@ -113,16 +117,27 @@ class ProductDetailsScreen extends ConsumerWidget {
         const Gap(8),
       ],
       flexibleSpace: FlexibleSpaceBar(
-        background: AnyLinkPreview(
-          link: item.url,
-          cache: const Duration(days: 7),
-          backgroundColor: AppColors.surfaceLight,
-          errorWidget: Container(
-            color: Colors.white10,
-            child: const Icon(
-              CupertinoIcons.photo,
-              size: 60,
-              color: Colors.white24,
+        background: Container(
+          color: AppColors.surfaceLight,
+          child: const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  CupertinoIcons.link,
+                  size: 60,
+                  color: Colors.white24,
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Product Link',
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -130,7 +145,7 @@ class ProductDetailsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -185,7 +200,7 @@ class ProductDetailsScreen extends ConsumerWidget {
           ),
         const Gap(16),
         InkWell(
-          onTap: _launchUrl,
+          onTap: () => _openInWebView(context),
           child: Row(
             children: [
               const Icon(CupertinoIcons.link, color: Colors.white38, size: 16),
@@ -259,9 +274,9 @@ class ProductDetailsScreen extends ConsumerWidget {
         ),
         const Gap(16),
         _buildActionButton(
-          label: 'OPEN IN BROWSER',
+          label: 'OPEN IN WEBVIEW',
           icon: CupertinoIcons.globe,
-          onTap: _launchUrl,
+          onTap: () => _openInWebView(context),
           isPrimary: false,
         ),
       ],

@@ -1,4 +1,3 @@
-import 'package:any_link_preview/any_link_preview.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,25 +33,21 @@ class WishlistCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Link Preview Image
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
-              ),
-              child: AnyLinkPreview(
-                link: item.url,
-                cache: const Duration(days: 7),
-                backgroundColor: Colors.transparent,
-                errorWidget: Container(
-                  height: isGrid ? 100 : 150,
-                  color: Colors.white10,
-                  child: const Center(
-                    child: Icon(CupertinoIcons.link, color: Colors.white24),
-                  ),
+            // Simple Link Placeholder
+            Container(
+              height: isGrid ? 100 : 60,
+              decoration: const BoxDecoration(
+                color: AppColors.surfaceLight,
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(20),
                 ),
-                errorBody: 'Could not load preview',
-                errorTitle: 'Link Preview',
-                previewHeight: isGrid ? 120 : 160,
+              ),
+              child: const Center(
+                child: Icon(
+                  CupertinoIcons.link,
+                  size: 40,
+                  color: Colors.white24,
+                ),
               ),
             ),
 
@@ -62,7 +57,7 @@ class WishlistCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    item.title ?? 'No Title',
+                    item.notes?.isEmpty ?? true ? item.title ?? 'No Title' : item.notes!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.montserrat(
