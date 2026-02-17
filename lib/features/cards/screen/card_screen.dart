@@ -196,6 +196,67 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
 
             const Gap(24),
 
+            // Add money button
+            if (filteredCards.isNotEmpty)
+              InkWell(
+                onTap: () {
+                  AppBottomSheet.showAddMoneyBottomSheet(context, ref);
+                },
+                borderRadius: BorderRadius.circular(24),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppColors.successGreen.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: AppColors.successGreen.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        height: 48,
+                        width: 48,
+                        decoration: BoxDecoration(
+                          color: AppColors.successGreen.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(
+                          Icons.currency_rupee_rounded,
+                          color: AppColors.successGreen,
+                          size: 24,
+                        ),
+                      ),
+                      const Gap(16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Add Money',
+                              style: GoogleFonts.montserrat(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              'Add income to existing cards',
+                              style: GoogleFonts.montserrat(
+                                color: Colors.white38,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, color: Colors.white24),
+                    ],
+                  ),
+                ),
+              ),
+            if (filteredCards.isNotEmpty) const Gap(16),
+
             // Add card button
             InkWell(
               onTap: () {

@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../core/theme/app_theme.dart';
 import '../core/models/card.dart';
+import '../core/models/payment.dart';
+import '../core/theme/app_theme.dart';
+import '../core/utils/currency_utils.dart';
 import '../features/cards/widget/card_preview_widget.dart';
 import '../features/home/widget/custom_segmented_tab_bar.dart';
 import '../providers/providers.dart';
@@ -537,6 +539,246 @@ class AppBottomSheet {
           ),
         ],
       ),
+    );
+  }
+
+  static void showAddMoneyBottomSheet(BuildContext context, WidgetRef ref) {
+    BankCard? selectedCard;
+    final TextEditingController amountController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Consumer(
+              builder: (context, ref, _) {
+                final cardsState = ref.watch(cardsProvider);
+                final cards = cardsState.cards;
+
+                return Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.9,
+                  ),
+                  padding: EdgeInsets.only(
+                    left: 24,
+                    right: 24,
+                    top: 16,
+                    bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+                  ),
+                  decoration: const BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(32),
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const Gap(24),
+                      Text(
+                        selectedCard == null ? 'Add Money' : 'Add Money to ${selectedCard!.bankName}',
+                        style: GoogleFonts.montserrat(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Gap(24),
+                      if (selectedCard == null) ...[
+                        Text(
+                          'Select a card to add money to',
+                          style: GoogleFonts.montserrat(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const Gap(16),
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: MediaQuery.of(context).size.height * 0.3,
+                          ),
+                          child: cards.isEmpty
+                              ? const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 32),
+                                  child: Text('No cards available'),
+                                )
+                              : ListView.separated(
+                                  shrinkWrap: true,
+                                  itemCount: cards.length,
+                                  separatorBuilder: (_, __) => const Gap(8),
+                                  itemBuilder: (context, index) {
+                                    final card = cards[index];
+                                    return GestureDetector(
+                                      onTap: () => setState(() => selectedCard = card),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(alpha: 0.05),
+                                          borderRadius: BorderRadius.circular(16),
+                                          border: Border.all(color: Colors.white10),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(10),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.primaryNeon.withValues(alpha: 0.1),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Icon(
+                                                card.isCredit
+                                                    ? Icons.credit_card
+                                                    : Icons.account_balance_wallet,
+                                                color: AppColors.primaryNeon,
+                                                size: 20,
+                                              ),
+                                            ),
+                                            const Gap(16),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    card.bankName,
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 16,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    'Current: ${CurrencyUtils.format(card.balance)}',
+                                                    style: TextStyle(
+                                                      color: Colors.white.withValues(alpha: 0.5),
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const Icon(
+                                              Icons.chevron_right,
+                                              color: Colors.white24,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ] else ...[
+                        CardPreviewWidget(
+                          bankName: selectedCard!.bankName,
+                          balance: (selectedCard!.balance + (double.tryParse(amountController.text) ?? 0.0)).toStringAsFixed(2),
+                          isCredit: selectedCard!.isCredit,
+                        ),
+                        const Gap(24),
+                        _buildField(
+                          controller: amountController,
+                          hint: 'Amount to add',
+                          icon: Icons.currency_rupee_rounded,
+                          keyboardType: TextInputType.number,
+                          onChanged: (val) => setState(() {}),
+                        ),
+                        const Gap(32),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => setState(() => selectedCard = null),
+                                child: const Text('BACK'),
+                              ),
+                            ),
+                            const Gap(16),
+                            Expanded(
+                              flex: 2,
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  final amount = double.tryParse(amountController.text.trim()) ?? 0.0;
+                                  if (amount <= 0) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Please enter a valid amount'),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  try {
+                                    final updatedCard = selectedCard!.copyWith(
+                                      balance: selectedCard!.balance + amount,
+                                    );
+
+                                    final success = await ref
+                                        .read(cardsProvider.notifier)
+                                        .updateCard(updatedCard);
+
+                                    if (success && context.mounted) {
+                                      // Create income transaction record
+                                      final transaction = Payment(
+                                        amount: amount,
+                                        cardId: selectedCard!.id!,
+                                        note: 'Money added to ${selectedCard!.bankName}',
+                                        date: DateTime.now().toIso8601String(),
+                                        categoryId: 1, // Income category ID
+                                        isRecurring: false,
+                                        reminderNotification: false
+                                      );
+
+                                      await ref
+                                          .read(paymentsProvider.notifier)
+                                          .addPayment(transaction);
+
+                                      Navigator.pop(context);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Added ${CurrencyUtils.format(amount)} to ${selectedCard!.bankName}'),
+                                        ),
+                                      );
+                                    } else if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Failed to add money'),
+                                        ),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Error: $e'),
+                                          duration: const Duration(seconds: 5),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                                child: const Text('ADD MONEY'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 
