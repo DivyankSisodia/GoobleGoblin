@@ -7,6 +7,7 @@ class WishlistItem {
   final String? notes;
   final String dateAdded;
   final bool isPurchased;
+  final String? updatedAt;
 
   WishlistItem({
     this.id,
@@ -17,6 +18,7 @@ class WishlistItem {
     this.notes,
     required this.dateAdded,
     this.isPurchased = false,
+    this.updatedAt,
   });
 
   Map<String, dynamic> toMap() => {
@@ -28,6 +30,7 @@ class WishlistItem {
     'notes': notes,
     'date_added': dateAdded,
     'is_purchased': isPurchased ? 1 : 0,
+    'updated_at': updatedAt,
   };
 
   factory WishlistItem.fromMap(Map<String, dynamic> map) => WishlistItem(
@@ -39,6 +42,7 @@ class WishlistItem {
     notes: map['notes'],
     dateAdded: map['date_added'],
     isPurchased: map['is_purchased'] == 1,
+    updatedAt: map['updated_at'],
   );
 
   WishlistItem copyWith({
@@ -50,6 +54,7 @@ class WishlistItem {
     String? notes,
     String? dateAdded,
     bool? isPurchased,
+    String? updatedAt,
   }) {
     return WishlistItem(
       id: id ?? this.id,
@@ -60,6 +65,7 @@ class WishlistItem {
       notes: notes ?? this.notes,
       dateAdded: dateAdded ?? this.dateAdded,
       isPurchased: isPurchased ?? this.isPurchased,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }

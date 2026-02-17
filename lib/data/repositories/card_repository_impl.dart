@@ -63,7 +63,9 @@ class CardRepositoryImpl implements CardRepository {
     }
 
     try {
-      final id = await _dbHelper.insertCard(card);
+      final map = card.toMap();
+      map['updated_at'] = DateTime.now().toIso8601String();
+      final id = await _dbHelper.insertCard(BankCard.fromMap(map));
       return ResultHelper.success(id);
     } catch (e) {
       return ResultHelper.failure(DatabaseFailure.insertFailed('card', e));
@@ -93,7 +95,9 @@ class CardRepositoryImpl implements CardRepository {
     }
 
     try {
-      final rowsAffected = await _dbHelper.updateCard(card);
+      final map = card.toMap();
+      map['updated_at'] = DateTime.now().toIso8601String();
+      final rowsAffected = await _dbHelper.updateCard(BankCard.fromMap(map));
       return ResultHelper.success(rowsAffected > 0);
     } catch (e) {
       return ResultHelper.failure(DatabaseFailure.updateFailed('card', e));

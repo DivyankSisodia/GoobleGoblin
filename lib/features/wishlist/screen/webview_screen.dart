@@ -30,21 +30,27 @@ class _WebViewScreenState extends State<WebViewScreen> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (int progress) {
-            setState(() {
-              _loadingProgress = progress;
-              _isLoading = progress < 100;
-            });
+            if (mounted) {
+              setState(() {
+                _loadingProgress = progress;
+                _isLoading = progress < 100;
+              });
+            }
           },
           onPageStarted: (String url) {
-            setState(() {
-              _isLoading = true;
-              _loadingProgress = 0;
-            });
+            if (mounted) {
+              setState(() {
+                _isLoading = true;
+                _loadingProgress = 0;
+              });
+            }
           },
           onPageFinished: (String url) {
-            setState(() {
-              _isLoading = false;
-            });
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+              });
+            }
           },
         ),
       )

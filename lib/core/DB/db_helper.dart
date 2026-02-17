@@ -1,11 +1,12 @@
+import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_live/sqflite_live.dart';
-import 'package:path/path.dart';
+import 'dart:math';
 
-import '../models/card.dart';
-import '../models/payment.dart';
-import '../models/category.dart';
 import '../models/app_settings.dart';
+import '../models/card.dart';
+import '../models/category.dart';
+import '../models/payment.dart';
 
 /// Database helper singleton for all database operations
 class DatabaseHelper {
@@ -15,7 +16,7 @@ class DatabaseHelper {
   DatabaseHelper._init();
 
   /// Current database version
-  static const int _dbVersion = 5;
+  static const int _dbVersion = 4;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -32,7 +33,6 @@ class DatabaseHelper {
       version: _dbVersion,
       onCreate: _createDB,
       onConfigure: (db) async => await db.execute('PRAGMA foreign_keys = ON'),
-      onUpgrade: _onUpgrade,
     );
 
     // Initialize sqflite_live for debugging (only in debug mode)
@@ -44,88 +44,12 @@ class DatabaseHelper {
     return db;
   }
 
-  /// Database migrations
+  /// Version 4 migration: Add account types, credit limits, app settings
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      await db.execute('ALTER TABLE cards ADD COLUMN type TEXT');
-    }
-
-    if (oldVersion < 3) {
-      // Add new columns to cards table
-      await db.execute(
-        'ALTER TABLE cards ADD COLUMN isPrimary INTEGER NOT NULL DEFAULT 0',
-      );
-      await db.execute('ALTER TABLE cards ADD COLUMN createdAt TEXT');
-      await db.execute('ALTER TABLE cards ADD COLUMN updatedAt TEXT');
-
-      final now = DateTime.now().toIso8601String();
-      await db.execute(
-        "UPDATE cards SET createdAt = '$now', updatedAt = '$now'",
-      );
-
-      // Create card_history table
-      await db.execute('''CREATE TABLE IF NOT EXISTS card_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cardId INTEGER NOT NULL,
-        isPrimary INTEGER NOT NULL,
-        startDate TEXT NOT NULL,
-        endDate TEXT,
-        FOREIGN KEY (cardId) REFERENCES cards (id) ON DELETE CASCADE
-      )''');
-
-      // Create daily_expenditure table
-      await db.execute('''CREATE TABLE IF NOT EXISTS daily_expenditure (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cardId INTEGER NOT NULL,
-        date TEXT NOT NULL,
-        totalAmount REAL NOT NULL DEFAULT 0,
-        transactionCount INTEGER NOT NULL DEFAULT 0,
-        FOREIGN KEY (cardId) REFERENCES cards (id) ON DELETE CASCADE,
-        UNIQUE(cardId, date)
-      )''');
-
-      // Create monthly_expenditure table
-      await db.execute('''CREATE TABLE IF NOT EXISTS monthly_expenditure (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cardId INTEGER NOT NULL,
-        yearMonth TEXT NOT NULL,
-        totalAmount REAL NOT NULL DEFAULT 0,
-        transactionCount INTEGER NOT NULL DEFAULT 0,
-        avgDailyExpenditure REAL NOT NULL DEFAULT 0,
-        FOREIGN KEY (cardId) REFERENCES cards (id) ON DELETE CASCADE,
-        UNIQUE(cardId, yearMonth)
-      )''');
-
-      // Add note and createdAt to payments table
-      await db.execute('ALTER TABLE payments ADD COLUMN note TEXT');
-      await db.execute('ALTER TABLE payments ADD COLUMN createdAt TEXT');
-      await db.execute("UPDATE payments SET createdAt = '$now'");
-    }
-
     if (oldVersion < 4) {
       await _migrateToVersion4(db);
     }
-
-    if (oldVersion < 5) {
-      await _migrateToVersion5(db);
-    }
   }
-
-  /// Version 5 migration: Add wishlist table
-  Future<void> _migrateToVersion5(Database db) async {
-    await db.execute('''CREATE TABLE IF NOT EXISTS wishlist (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      url TEXT NOT NULL,
-      title TEXT,
-      image_url TEXT,
-      price REAL,
-      notes TEXT,
-      date_added TEXT NOT NULL,
-      is_purchased INTEGER DEFAULT 0
-    )''');
-  }
-
-  /// Version 4 migration: Add account types, credit limits, app settings
   Future<void> _migrateToVersion4(Database db) async {
     // 1. Add new columns to cards table
     try {
@@ -299,7 +223,8 @@ class DatabaseHelper {
       price REAL,
       notes TEXT,
       date_added TEXT NOT NULL,
-      is_purchased INTEGER DEFAULT 0
+      is_purchased INTEGER DEFAULT 0,
+      updated_at TEXT
     )''');
   }
 
@@ -1149,7 +1074,7 @@ class DatabaseHelper {
 
     // 5. Seed Payments (spanning last 45 days)
     final now = DateTime.now();
-    final random = _Random();
+    final random = Random();
 
     // Recurring Payments
     final recurringPayments = [
@@ -1246,11 +1171,3 @@ class DatabaseHelper {
   }
 }
 
-/// Simple random helper
-class _Random {
-  int _seed = DateTime.now().millisecondsSinceEpoch;
-  int nextInt(int max) {
-    _seed = (_seed * 1103515245 + 12345) & 0x7fffffff;
-    return _seed % max;
-  }
-}

@@ -11,6 +11,7 @@ class Payment {
   final bool reminderNotification;
   final String? note;
   final String? createdAt;
+  final String? updatedAt;
   final Category? category;
 
   Payment({
@@ -24,6 +25,7 @@ class Payment {
     required this.reminderNotification,
     this.note,
     this.createdAt,
+    this.updatedAt,
     this.category,
   });
 
@@ -37,7 +39,7 @@ class Payment {
         'frequency': frequency,
         'reminderNotification': reminderNotification ? 1 : 0,
         'note': note,
-        'createdAt': createdAt ?? DateTime.now().toIso8601String()
+        'createdAt': createdAt ?? DateTime.now().toIso8601String(),
       };
 
   factory Payment.fromMap(Map<String, dynamic> map) => Payment(
@@ -74,7 +76,7 @@ Payment(
   reminderNotification: $reminderNotification,
   note: $note,
   createdAt: $createdAt,
-  category: $category
+  category: $category,
 )
 ''';
   }
