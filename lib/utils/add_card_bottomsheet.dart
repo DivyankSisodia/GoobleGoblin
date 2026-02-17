@@ -113,45 +113,64 @@ class AppBottomSheet {
                     height: 56,
                     child: ElevatedButton(
                       onPressed: () async {
-                        final name = bankNameController.text.trim();
-                        final amount =
-                            double.tryParse(amountController.text.trim()) ??
-                            0.0;
-                        final limit =
-                            double.tryParse(
-                              creditLimitController.text.trim(),
-                            ) ??
-                            0.0;
+                        try {
+                          final name = bankNameController.text.trim();
+                          final amount = isCredit
+                              ? 0.0
+                              : double.tryParse(amountController.text.trim()) ??
+                                  0.0;
+                          final limit = isCredit
+                              ? double.tryParse(
+                                    creditLimitController.text.trim(),
+                                  ) ??
+                                  0.0
+                              : 0.0;
 
-                        if (!isCash && name.isEmpty) {
+                          if (!isCash && name.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter a bank name'),
+                              ),
+                            );
+                            return;
+                          }
+
+                          BankCard card;
+                          if (isCash) {
+                            card = BankCard.cash(balance: amount);
+                          } else if (isCredit) {
+                            card = BankCard.credit(
+                              bankName: name,
+                              creditLimit: limit,
+                            );
+                          } else {
+                            card = BankCard.debit(
+                              bankName: name,
+                              balance: amount,
+                            );
+                          }
+
+                          final success = await ref
+                              .read(cardsProvider.notifier)
+                              .addCard(card);
+                          if (success && context.mounted) {
+                            Navigator.pop(context);
+                          } else if (!success && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Failed to save card'),
+                              ),
+                            );
+                          }
+                        } catch (e, stackTrace) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please enter a bank name'),
+                            SnackBar(
+                              content: Text('Error: $e'),
+                              duration: const Duration(seconds: 5),
                             ),
                           );
-                          return;
-                        }
-
-                        BankCard card;
-                        if (isCash) {
-                          card = BankCard.cash(balance: amount);
-                        } else if (isCredit) {
-                          card = BankCard.credit(
-                            bankName: name,
-                            creditLimit: limit,
-                          );
-                        } else {
-                          card = BankCard.debit(
-                            bankName: name,
-                            balance: amount,
-                          );
-                        }
-
-                        final success = await ref
-                            .read(cardsProvider.notifier)
-                            .addCard(card);
-                        if (success && context.mounted) {
-                          Navigator.pop(context);
+                          debugPrint('Error saving card: $e');
+                          debugPrint('Stack trace: $stackTrace');
                         }
                       },
                       child: const Text('SAVE SOURCE'),

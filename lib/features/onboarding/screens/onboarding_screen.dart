@@ -4,14 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/models/card.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_utils.dart';
-import '../../../core/models/card.dart';
-import '../providers/onboarding_provider.dart';
-import '../widgets/step_indicator.dart';
-import '../widgets/money_source_card.dart';
-import '../widgets/add_account_sheet.dart';
 import '../../main_screen.dart';
+import '../providers/onboarding_provider.dart';
+import '../widgets/add_account_sheet.dart';
+import '../widgets/money_source_card.dart';
+import '../widgets/step_indicator.dart';
 
 /// Main onboarding screen with animated multi-step flow
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -291,9 +291,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
             decoration: BoxDecoration(
               color: AppColors.surfaceLight,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: AppColors.primaryNeon.withValues(alpha: 0.3),
-              ),
             ),
             child: Row(
               children: [
@@ -308,6 +305,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
                 const Gap(12),
                 Expanded(
                   child: TextField(
+                    
                     controller: _budgetController,
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -317,13 +315,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
                       color: Colors.white,
                     ),
                     decoration: InputDecoration(
+                      fillColor: AppColors.surfaceLight,
                       hintText: '50,000',
                       hintStyle: GoogleFonts.montserrat(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
                         color: AppColors.textSecondary.withValues(alpha: 0.3),
                       ),
-                      border: InputBorder.none,
+                      // border: InputBorder.none,
                     ),
                     onChanged: (value) {
                       final amount = double.tryParse(value) ?? 0;
@@ -589,7 +588,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        // color: AppColors.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SafeArea(

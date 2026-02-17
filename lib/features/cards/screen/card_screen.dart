@@ -27,11 +27,12 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
     final cardsState = ref.watch(cardsProvider);
     final cards = cardsState.cards;
 
-    // Filter cards based on type (Debit vs Credit)
-    //selectedTabIndex 0 -> Debit, 1 -> Credit
+    // Filter cards based on type (Debit, Credit, Cash)
+    // selectedTabIndex 0 -> Debit, 1 -> Credit, 2 -> Cash
     final filteredCards = cards.where((c) {
-      if (selectedTabIndex == 0) return c.isDebit || c.isCash;
-      return c.isCredit;
+      if (selectedTabIndex == 0) return c.isDebit;
+      if (selectedTabIndex == 1) return c.isCredit;
+      return c.isCash;
     }).toList();
 
     return Scaffold(
@@ -64,7 +65,11 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
               padding: const EdgeInsets.only(right: 8),
               child: IconButton(
                 onPressed: () {
-                  final cardType = selectedTabIndex == 0 ? 'Debit' : 'Credit';
+                  final cardType = selectedTabIndex == 0
+                      ? 'Debit'
+                      : selectedTabIndex == 1
+                          ? 'Credit'
+                          : 'Cash';
                   AppBottomSheet.showManageCardsBottomSheet(
                     context,
                     ref,
@@ -114,7 +119,7 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
 
             /// Tabs
             CustomSegmentedTabBar(
-              tabs: const ['Debit & Cash', 'Credit Cards'],
+              tabs: const ['Debit Cards', 'Credit Cards', 'Cash'],
               selectedIndex: selectedTabIndex,
               onChanged: (index) {
                 setState(() => selectedTabIndex = index);
@@ -139,13 +144,19 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
                           Icon(
                             selectedTabIndex == 0
                                 ? Icons.account_balance_wallet_outlined
-                                : Icons.credit_card_off_outlined,
+                                : selectedTabIndex == 1
+                                    ? Icons.credit_card_off_outlined
+                                    : Icons.money_off_outlined,
                             color: Colors.white10,
                             size: 80,
                           ),
                           const Gap(16),
                           Text(
-                            'No ${selectedTabIndex == 0 ? 'debit' : 'credit'} cards found',
+                            selectedTabIndex == 0
+                                ? 'No debit cards found'
+                                : selectedTabIndex == 1
+                                    ? 'No credit cards found'
+                                    : 'No cash entries found',
                             style: GoogleFonts.montserrat(
                               color: Colors.white38,
                               fontSize: 16,

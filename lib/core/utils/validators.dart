@@ -49,21 +49,24 @@ class Validators {
     required String? type,
   }) {
     final nameResult = notEmpty(bankName, 'Bank name');
-    if (nameResult.isFailure)
+    if (nameResult.isFailure) {
       return ResultHelper.failure(nameResult.failureValue);
+    }
 
     final balanceResult = positiveAmount(balance);
-    if (balanceResult.isFailure)
+    if (balanceResult.isFailure) {
       return ResultHelper.failure(balanceResult.failureValue);
+    }
 
     final typeResult = notEmpty(type, 'Card type');
-    if (typeResult.isFailure)
+    if (typeResult.isFailure) {
       return ResultHelper.failure(typeResult.failureValue);
+    }
 
-    if (type != 'Debit' && type != 'Credit') {
+    if (type != 'Debit' && type != 'Credit' && type != 'Cash') {
       return ResultHelper.failure(
         const ValidationFailure(
-          message: 'Card type must be either Debit or Credit',
+          message: 'Card type must be either Debit, Credit, or Cash',
           code: 'VALIDATION_INVALID_CARD_TYPE',
         ),
       );
@@ -80,8 +83,9 @@ class Validators {
     required int? categoryId,
   }) {
     final amountResult = positiveAmount(amount);
-    if (amountResult.isFailure)
+    if (amountResult.isFailure) {
       return ResultHelper.failure(amountResult.failureValue);
+    }
 
     if (amount == 0) {
       return ResultHelper.failure(
@@ -93,8 +97,9 @@ class Validators {
     }
 
     final dateResult = validDate(date);
-    if (dateResult.isFailure)
+    if (dateResult.isFailure) {
       return ResultHelper.failure(dateResult.failureValue);
+    }
 
     if (cardId == null || cardId <= 0) {
       return ResultHelper.failure(
@@ -123,12 +128,14 @@ class Validators {
     required String? icon,
   }) {
     final labelResult = notEmpty(label, 'Category name');
-    if (labelResult.isFailure)
+    if (labelResult.isFailure) {
       return ResultHelper.failure(labelResult.failureValue);
+    }
 
     final iconResult = notEmpty(icon, 'Icon');
-    if (iconResult.isFailure)
+    if (iconResult.isFailure) {
       return ResultHelper.failure(iconResult.failureValue);
+    }
 
     return ResultHelper.success(true);
   }

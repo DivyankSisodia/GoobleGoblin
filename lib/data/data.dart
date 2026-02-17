@@ -1,5 +1,5 @@
 /// Data layer exports
-library data;
+library;
 
 // Repositories
 export 'repositories/card_repository.dart';

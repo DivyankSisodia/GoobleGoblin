@@ -1,20 +1,20 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/theme/app_theme.dart';
-import '../../../core/models/payment.dart';
 import '../../../core/models/category.dart';
+import '../../../core/models/payment.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_utils.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../providers/providers.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../main_screen.dart';
-import 'new_payment_screen.dart';
-import '../../wishlist/screen/wishlist_screen.dart';
 import '../../wishlist/screen/add_product_screen.dart';
+import '../../wishlist/screen/wishlist_screen.dart';
+import 'new_payment_screen.dart';
 
 class WalletHistoryScreen extends ConsumerStatefulWidget {
   const WalletHistoryScreen({super.key});
@@ -262,12 +262,17 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
                     ref.read(paymentsProvider.notifier).setSearchQuery(value),
                 style: GoogleFonts.montserrat(color: Colors.white),
                 decoration: InputDecoration(
+                  fillColor: AppColors.surfaceLight.withValues(alpha: 0.5),
                   hintText: 'Search for anything...',
                   hintStyle: GoogleFonts.montserrat(
                     color: Colors.grey,
                     fontSize: 14,
                   ),
                   border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  focusedErrorBorder: InputBorder.none,
                 ),
               ),
             ),
