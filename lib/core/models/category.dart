@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../app_images.dart';
+import 'card.dart' show SyncStatus;
 
 /// Category model for transaction categorization
 /// All categories are predefined - users cannot create custom categories
@@ -11,6 +12,12 @@ class Category {
   final bool isPredefined;
   final Color? color; // Optional color for the category
 
+  // Sync fields
+  final String? uuid;
+  final SyncStatus syncStatus;
+  final String? lastSyncedAt;
+  final bool isDeleted;
+
   const Category({
     this.id,
     required this.label,
@@ -18,6 +25,10 @@ class Category {
     this.assetPath,
     this.isPredefined = true,
     this.color,
+    this.uuid,
+    this.syncStatus = SyncStatus.pendingCreate,
+    this.lastSyncedAt,
+    this.isDeleted = false,
   });
 
   Map<String, dynamic> toMap() => {
@@ -26,6 +37,20 @@ class Category {
     'icon': icon,
     'assetPath': assetPath,
     'isPredefined': isPredefined ? 1 : 0,
+    'uuid': uuid,
+    'syncStatus': syncStatus.dbValue,
+    'lastSyncedAt': lastSyncedAt,
+    'isDeleted': isDeleted ? 1 : 0,
+  };
+
+  /// Convert to Supabase-compatible map
+  Map<String, dynamic> toSupabaseMap() => {
+    'uuid': uuid,
+    'label': label,
+    'icon': icon,
+    'asset_path': assetPath,
+    'is_predefined': isPredefined,
+    'is_deleted': isDeleted,
   };
 
   factory Category.fromMap(Map<String, dynamic> map) => Category(
@@ -34,6 +59,22 @@ class Category {
     icon: map['icon'] ?? '',
     assetPath: map['assetPath'],
     isPredefined: (map['isPredefined'] ?? 1) == 1,
+    uuid: map['uuid'],
+    syncStatus: SyncStatus.fromString(map['syncStatus']),
+    lastSyncedAt: map['lastSyncedAt'],
+    isDeleted: (map['isDeleted'] ?? 0) == 1,
+  );
+
+  /// Create from Supabase row
+  factory Category.fromSupabaseMap(Map<String, dynamic> map) => Category(
+    label: map['label'] ?? '',
+    icon: map['icon'] ?? '',
+    assetPath: map['asset_path'],
+    isPredefined: map['is_predefined'] == true,
+    uuid: map['uuid'],
+    syncStatus: SyncStatus.synced,
+    lastSyncedAt: DateTime.now().toIso8601String(),
+    isDeleted: map['is_deleted'] == true,
   );
 
   Category copyWith({
@@ -43,6 +84,10 @@ class Category {
     String? assetPath,
     bool? isPredefined,
     Color? color,
+    String? uuid,
+    SyncStatus? syncStatus,
+    String? lastSyncedAt,
+    bool? isDeleted,
   }) {
     return Category(
       id: id ?? this.id,
@@ -51,6 +96,10 @@ class Category {
       assetPath: assetPath ?? this.assetPath,
       isPredefined: isPredefined ?? this.isPredefined,
       color: color ?? this.color,
+      uuid: uuid ?? this.uuid,
+      syncStatus: syncStatus ?? this.syncStatus,
+      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 

@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/DB/db_helper.dart';
 import '../core/models/wishlist_item.dart';
+import '../core/services/sync_engine.dart';
 import '../data/repositories/wishlist_repository.dart';
 import '../data/repositories/wishlist_repository_impl.dart';
+import 'sync_provider.dart';
 
 /// Provider for WishlistRepository
 final wishlistRepositoryProvider = Provider<WishlistRepository>((ref) {
@@ -42,9 +45,21 @@ class WishlistState {
 /// Wishlist notifier
 class WishlistNotifier extends StateNotifier<WishlistState> {
   final WishlistRepository _repository;
+  final Ref _ref;
+  StreamSubscription<SyncResult>? _syncDataSub;
 
-  WishlistNotifier(this._repository) : super(const WishlistState()) {
+  WishlistNotifier(this._repository, this._ref) : super(const WishlistState()) {
     loadWishlist();
+    // Reload whenever the sync engine pulls or pushes data
+    _syncDataSub = SyncEngine.instance.onDataChanged.listen(
+      (_) => loadWishlist(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _syncDataSub?.cancel();
+    super.dispose();
   }
 
   Future<void> loadWishlist() async {
@@ -69,6 +84,7 @@ class WishlistNotifier extends StateNotifier<WishlistState> {
       },
       (id) {
         loadWishlist();
+        _ref.read(syncProvider.notifier).syncAfterChange();
         return true;
       },
     );
@@ -84,6 +100,7 @@ class WishlistNotifier extends StateNotifier<WishlistState> {
       },
       (success) {
         loadWishlist();
+        _ref.read(syncProvider.notifier).syncAfterChange();
         return true;
       },
     );
@@ -99,6 +116,7 @@ class WishlistNotifier extends StateNotifier<WishlistState> {
       },
       (success) {
         loadWishlist();
+        _ref.read(syncProvider.notifier).syncAfterChange();
         return true;
       },
     );
@@ -114,6 +132,7 @@ class WishlistNotifier extends StateNotifier<WishlistState> {
       },
       (success) {
         loadWishlist();
+        _ref.read(syncProvider.notifier).syncAfterChange();
         return true;
       },
     );
@@ -124,6 +143,6 @@ class WishlistNotifier extends StateNotifier<WishlistState> {
 final wishlistProvider = StateNotifierProvider<WishlistNotifier, WishlistState>(
   (ref) {
     final repository = ref.watch(wishlistRepositoryProvider);
-    return WishlistNotifier(repository);
+    return WishlistNotifier(repository, ref);
   },
 );

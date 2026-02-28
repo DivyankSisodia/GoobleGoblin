@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/card.dart';
+import '../../core/services/sync_engine.dart';
 import '../../data/repositories/card_repository.dart';
 import '../../data/repositories/card_repository_impl.dart';
+import 'sync_provider.dart';
 
 /// Provider for CardRepository
 final cardRepositoryProvider = Provider<CardRepository>((ref) {
@@ -72,9 +75,19 @@ class CardsState {
 /// Cards notifier using modern Riverpod patterns
 class CardsNotifier extends StateNotifier<CardsState> {
   final CardRepository _repository;
+  final Ref _ref;
+  StreamSubscription<SyncResult>? _syncDataSub;
 
-  CardsNotifier(this._repository) : super(const CardsState()) {
+  CardsNotifier(this._repository, this._ref) : super(const CardsState()) {
     loadCards();
+    // Reload whenever the sync engine pulls or pushes data
+    _syncDataSub = SyncEngine.instance.onDataChanged.listen((_) => loadCards());
+  }
+
+  @override
+  void dispose() {
+    _syncDataSub?.cancel();
+    super.dispose();
   }
 
   /// Load all cards from repository
@@ -106,6 +119,8 @@ class CardsNotifier extends StateNotifier<CardsState> {
       },
       (id) {
         loadCards();
+        // Trigger background sync
+        _ref.read(syncProvider.notifier).syncAfterChange();
         return true;
       },
     );
@@ -124,6 +139,7 @@ class CardsNotifier extends StateNotifier<CardsState> {
       },
       (success) {
         loadCards();
+        _ref.read(syncProvider.notifier).syncAfterChange();
         return success;
       },
     );
@@ -142,6 +158,7 @@ class CardsNotifier extends StateNotifier<CardsState> {
       },
       (success) {
         loadCards();
+        _ref.read(syncProvider.notifier).syncAfterChange();
         return success;
       },
     );
@@ -199,7 +216,7 @@ class CardsNotifier extends StateNotifier<CardsState> {
 /// Main cards provider
 final cardsProvider = StateNotifierProvider<CardsNotifier, CardsState>((ref) {
   final repository = ref.watch(cardRepositoryProvider);
-  return CardsNotifier(repository);
+  return CardsNotifier(repository, ref);
 });
 
 /// Provider for primary card

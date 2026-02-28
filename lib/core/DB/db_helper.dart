@@ -1,6 +1,7 @@
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_live/sqflite_live.dart';
+import 'package:uuid/uuid.dart';
 import 'dart:math';
 
 import '../models/app_settings.dart';
@@ -16,7 +17,7 @@ class DatabaseHelper {
   DatabaseHelper._init();
 
   /// Current database version
-  static const int _dbVersion = 4;
+  static const int _dbVersion = 5;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -32,6 +33,7 @@ class DatabaseHelper {
       path,
       version: _dbVersion,
       onCreate: _createDB,
+      onUpgrade: _onUpgrade,
       onConfigure: (db) async => await db.execute('PRAGMA foreign_keys = ON'),
     );
 
@@ -49,7 +51,11 @@ class DatabaseHelper {
     if (oldVersion < 4) {
       await _migrateToVersion4(db);
     }
+    if (oldVersion < 5) {
+      await _migrateToVersion5(db);
+    }
   }
+
   Future<void> _migrateToVersion4(Database db) async {
     // 1. Add new columns to cards table
     try {
@@ -120,6 +126,163 @@ class DatabaseHelper {
     ''');
   }
 
+  /// Version 5 migration: Add sync columns for offline-first architecture
+  Future<void> _migrateToVersion5(Database db) async {
+    const uuidGen = Uuid();
+
+    // Add sync columns to cards
+    final cardsColumns = [
+      'uuid TEXT UNIQUE',
+      'syncStatus TEXT DEFAULT \'PENDING_CREATE\'',
+      'lastSyncedAt TEXT',
+      'isDeleted INTEGER DEFAULT 0',
+    ];
+    for (final col in cardsColumns) {
+      try {
+        await db.execute('ALTER TABLE cards ADD COLUMN $col');
+      } catch (_) {}
+    }
+
+    // Add sync columns to categories
+    final catColumns = [
+      'uuid TEXT UNIQUE',
+      'syncStatus TEXT DEFAULT \'PENDING_CREATE\'',
+      'lastSyncedAt TEXT',
+      'isDeleted INTEGER DEFAULT 0',
+    ];
+    for (final col in catColumns) {
+      try {
+        await db.execute('ALTER TABLE categories ADD COLUMN $col');
+      } catch (_) {}
+    }
+
+    // Add sync columns to payments
+    final payColumns = [
+      'uuid TEXT UNIQUE',
+      'cardUuid TEXT',
+      'categoryUuid TEXT',
+      'syncStatus TEXT DEFAULT \'PENDING_CREATE\'',
+      'lastSyncedAt TEXT',
+      'isDeleted INTEGER DEFAULT 0',
+    ];
+    for (final col in payColumns) {
+      try {
+        await db.execute('ALTER TABLE payments ADD COLUMN $col');
+      } catch (_) {}
+    }
+
+    // Add sync columns to wishlist
+    final wishColumns = [
+      'uuid TEXT UNIQUE',
+      'syncStatus TEXT DEFAULT \'PENDING_CREATE\'',
+      'lastSyncedAt TEXT',
+      'isDeleted INTEGER DEFAULT 0',
+    ];
+    for (final col in wishColumns) {
+      try {
+        await db.execute('ALTER TABLE wishlist ADD COLUMN $col');
+      } catch (_) {}
+    }
+
+    // Create indexes for sync
+    try {
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_cards_uuid ON cards(uuid)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_payments_uuid ON payments(uuid)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_categories_uuid ON categories(uuid)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_wishlist_uuid ON wishlist(uuid)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_cards_syncStatus ON cards(syncStatus)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_payments_syncStatus ON payments(syncStatus)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_categories_syncStatus ON categories(syncStatus)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_wishlist_syncStatus ON wishlist(syncStatus)',
+      );
+    } catch (_) {}
+
+    // Assign UUIDs to existing records that don't have one
+    final cards = await db.query('cards', where: 'uuid IS NULL');
+    for (final card in cards) {
+      await db.update(
+        'cards',
+        {'uuid': uuidGen.v4(), 'syncStatus': 'PENDING_CREATE'},
+        where: 'id = ?',
+        whereArgs: [card['id']],
+      );
+    }
+
+    final categories = await db.query('categories', where: 'uuid IS NULL');
+    for (final cat in categories) {
+      await db.update(
+        'categories',
+        {'uuid': uuidGen.v4(), 'syncStatus': 'PENDING_CREATE'},
+        where: 'id = ?',
+        whereArgs: [cat['id']],
+      );
+    }
+
+    final payments = await db.query('payments', where: 'uuid IS NULL');
+    for (final pay in payments) {
+      final cardId = pay['cardId'];
+      final categoryId = pay['categoryId'];
+      // Look up card UUID
+      String? cardUuid;
+      if (cardId != null) {
+        final cardRow = await db.query(
+          'cards',
+          columns: ['uuid'],
+          where: 'id = ?',
+          whereArgs: [cardId],
+        );
+        if (cardRow.isNotEmpty) cardUuid = cardRow.first['uuid'] as String?;
+      }
+      // Look up category UUID
+      String? categoryUuid;
+      if (categoryId != null) {
+        final catRow = await db.query(
+          'categories',
+          columns: ['uuid'],
+          where: 'id = ?',
+          whereArgs: [categoryId],
+        );
+        if (catRow.isNotEmpty) categoryUuid = catRow.first['uuid'] as String?;
+      }
+      await db.update(
+        'payments',
+        {
+          'uuid': uuidGen.v4(),
+          'cardUuid': cardUuid,
+          'categoryUuid': categoryUuid,
+          'syncStatus': 'PENDING_CREATE',
+        },
+        where: 'id = ?',
+        whereArgs: [pay['id']],
+      );
+    }
+
+    final wishlist = await db.query('wishlist', where: 'uuid IS NULL');
+    for (final item in wishlist) {
+      await db.update(
+        'wishlist',
+        {'uuid': uuidGen.v4(), 'syncStatus': 'PENDING_CREATE'},
+        where: 'id = ?',
+        whereArgs: [item['id']],
+      );
+    }
+  }
+
   /// Create all tables (fresh install)
   Future _createDB(Database db, int version) async {
     // Categories table
@@ -128,7 +291,11 @@ class DatabaseHelper {
       label TEXT NOT NULL,
       icon TEXT,
       assetPath TEXT,
-      isPredefined INTEGER DEFAULT 1
+      isPredefined INTEGER DEFAULT 1,
+      uuid TEXT UNIQUE,
+      syncStatus TEXT DEFAULT 'PENDING_CREATE',
+      lastSyncedAt TEXT,
+      isDeleted INTEGER DEFAULT 0
     )''');
 
     // Cards table with account types
@@ -143,7 +310,11 @@ class DatabaseHelper {
       updatedAt TEXT NOT NULL,
       accountType TEXT DEFAULT 'DEBIT',
       creditLimit REAL DEFAULT 0,
-      usedAmount REAL DEFAULT 0
+      usedAmount REAL DEFAULT 0,
+      uuid TEXT UNIQUE,
+      syncStatus TEXT DEFAULT 'PENDING_CREATE',
+      lastSyncedAt TEXT,
+      isDeleted INTEGER DEFAULT 0
     )''');
 
     // Card history table
@@ -191,6 +362,12 @@ class DatabaseHelper {
       cardId INTEGER NOT NULL,
       categoryId INTEGER,
       createdAt TEXT NOT NULL,
+      uuid TEXT UNIQUE,
+      cardUuid TEXT,
+      categoryUuid TEXT,
+      syncStatus TEXT DEFAULT 'PENDING_CREATE',
+      lastSyncedAt TEXT,
+      isDeleted INTEGER DEFAULT 0,
       FOREIGN KEY (cardId) REFERENCES cards (id) ON DELETE CASCADE,
       FOREIGN KEY (categoryId) REFERENCES categories (id) ON DELETE SET NULL
     )''');
@@ -213,6 +390,16 @@ class DatabaseHelper {
       'CREATE INDEX idx_cards_accountType ON cards(accountType)',
     );
     await db.execute('CREATE INDEX idx_settings_key ON app_settings(key)');
+    await db.execute('CREATE INDEX idx_cards_uuid ON cards(uuid)');
+    await db.execute('CREATE INDEX idx_payments_uuid ON payments(uuid)');
+    await db.execute('CREATE INDEX idx_categories_uuid ON categories(uuid)');
+    await db.execute('CREATE INDEX idx_cards_syncStatus ON cards(syncStatus)');
+    await db.execute(
+      'CREATE INDEX idx_payments_syncStatus ON payments(syncStatus)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_categories_syncStatus ON categories(syncStatus)',
+    );
 
     // Wishlist table
     await db.execute('''CREATE TABLE wishlist (
@@ -224,8 +411,16 @@ class DatabaseHelper {
       notes TEXT,
       date_added TEXT NOT NULL,
       is_purchased INTEGER DEFAULT 0,
-      updated_at TEXT
+      updated_at TEXT,
+      uuid TEXT UNIQUE,
+      syncStatus TEXT DEFAULT 'PENDING_CREATE',
+      lastSyncedAt TEXT,
+      isDeleted INTEGER DEFAULT 0
     )''');
+    await db.execute('CREATE INDEX idx_wishlist_uuid ON wishlist(uuid)');
+    await db.execute(
+      'CREATE INDEX idx_wishlist_syncStatus ON wishlist(syncStatus)',
+    );
   }
 
   // ============================================================
@@ -313,10 +508,14 @@ class DatabaseHelper {
     await setSetting(AppSettingsKeys.categoriesSeeded, 'true');
   }
 
-  /// Get all categories
+  /// Get all categories (excluding soft-deleted)
   Future<List<Category>> getAllCategories() async {
     final db = await database;
-    final result = await db.query('categories', orderBy: 'label ASC');
+    final result = await db.query(
+      'categories',
+      where: 'isDeleted = 0',
+      orderBy: 'label ASC',
+    );
     return result.map((json) => Category.fromMap(json)).toList();
   }
 
@@ -339,14 +538,19 @@ class DatabaseHelper {
   /// Insert a new card/account
   Future<int> insertCard(BankCard card) async {
     final db = await database;
-    return await db.insert('cards', card.toMap());
+    final map = card.toMap();
+    // Ensure UUID is assigned
+    map['uuid'] ??= generateUuid();
+    map['syncStatus'] ??= SyncStatus.pendingCreate.dbValue;
+    return await db.insert('cards', map);
   }
 
-  /// Get all cards/accounts
+  /// Get all cards/accounts (excluding soft-deleted)
   Future<List<BankCard>> getAllCards() async {
     final db = await database;
     final result = await db.query(
       'cards',
+      where: 'isDeleted = 0',
       orderBy: 'isPrimary DESC, bankName ASC',
     );
     return result.map((json) => BankCard.fromMap(json)).toList();
@@ -382,17 +586,29 @@ class DatabaseHelper {
   Future<int> updateCard(BankCard card) async {
     final db = await database;
     final now = DateTime.now().toIso8601String();
-    return await db.update(
-      'cards',
-      {...card.toMap(), 'updatedAt': now},
-      where: 'id = ?',
-      whereArgs: [card.id],
-    );
+    final map = {...card.toMap(), 'updatedAt': now};
+    // Mark as pending update if currently synced
+    if (card.syncStatus == SyncStatus.synced) {
+      map['syncStatus'] = SyncStatus.pendingUpdate.dbValue;
+    }
+    return await db.update('cards', map, where: 'id = ?', whereArgs: [card.id]);
   }
 
-  /// Delete a card
+  /// Delete a card (soft delete for sync)
   Future<int> deleteCard(int id) async {
     final db = await database;
+    // Check if record was ever synced
+    final record = await db.query('cards', where: 'id = ?', whereArgs: [id]);
+    if (record.isNotEmpty && record.first['syncStatus'] == 'SYNCED') {
+      // Soft delete - mark for remote deletion
+      return await db.update(
+        'cards',
+        {'isDeleted': 1, 'syncStatus': 'PENDING_DELETE'},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+    // Never synced - just delete locally
     return await db.delete('cards', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -400,6 +616,13 @@ class DatabaseHelper {
   Future<void> setPrimaryCard(int cardId) async {
     final db = await database;
     final now = DateTime.now().toIso8601String();
+
+    // Get current primary card id before changing
+    final oldPrimary = await db.query(
+      'cards',
+      columns: ['id'],
+      where: 'isPrimary = 1',
+    );
 
     await db.transaction((txn) async {
       // Unset current primary
@@ -418,28 +641,43 @@ class DatabaseHelper {
         [now, cardId],
       );
     });
+
+    // Mark both old and new primary cards as dirty for sync
+    for (final row in oldPrimary) {
+      final oldId = row['id'] as int;
+      if (oldId != cardId) {
+    }
+    await markPendingUpdate('cards', cardId);
+        await markPendingUpdate('cards', oldId);
+      }
   }
 
   /// Update card balance (for Cash/Debit)
   Future<void> updateCardBalance(int cardId, double newBalance) async {
     final db = await database;
+    final now = DateTime.now().toIso8601String();
     await db.execute(
       '''
       UPDATE cards SET balance = ?, updatedAt = ? WHERE id = ?
     ''',
-      [newBalance, DateTime.now().toIso8601String(), cardId],
+      [newBalance, now, cardId],
     );
+    // Mark card dirty so it syncs to Supabase
+    await markPendingUpdate('cards', cardId);
   }
 
   /// Update credit card used amount
   Future<void> updateCreditUsed(int cardId, double usedAmount) async {
     final db = await database;
+    final now = DateTime.now().toIso8601String();
     await db.execute(
       '''
       UPDATE cards SET usedAmount = ?, updatedAt = ? WHERE id = ?
     ''',
-      [usedAmount, DateTime.now().toIso8601String(), cardId],
+      [usedAmount, now, cardId],
     );
+    // Mark card dirty so it syncs to Supabase
+    await markPendingUpdate('cards', cardId);
   }
 
   /// Get total balance across all accounts
@@ -475,8 +713,34 @@ class DatabaseHelper {
     final db = await database;
 
     return await db.transaction((txn) async {
+      // Ensure UUID is assigned
+      final map = payment.toMap();
+      map['uuid'] ??= generateUuid();
+      map['syncStatus'] ??= SyncStatus.pendingCreate.dbValue;
+
+      // Resolve card UUID
+      if (map['cardUuid'] == null) {
+        final cardRow = await txn.query(
+          'cards',
+          columns: ['uuid'],
+          where: 'id = ?',
+          whereArgs: [payment.cardId],
+        );
+        if (cardRow.isNotEmpty) map['cardUuid'] = cardRow.first['uuid'];
+      }
+      // Resolve category UUID
+      if (map['categoryUuid'] == null && payment.categoryId > 0) {
+        final catRow = await txn.query(
+          'categories',
+          columns: ['uuid'],
+          where: 'id = ?',
+          whereArgs: [payment.categoryId],
+        );
+        if (catRow.isNotEmpty) map['categoryUuid'] = catRow.first['uuid'];
+      }
+
       // 1. Insert the payment
-      final id = await txn.insert('payments', payment.toMap());
+      final id = await txn.insert('payments', map);
 
       // 2. Get the card to determine how to update balance
       final cardResult = await txn.query(
@@ -505,6 +769,12 @@ class DatabaseHelper {
             [payment.amount, now, payment.cardId],
           );
         }
+
+        // Mark card as dirty so updated balance syncs to Supabase
+        await txn.execute(
+          "UPDATE cards SET syncStatus = 'PENDING_UPDATE' WHERE id = ? AND syncStatus = 'SYNCED'",
+          [payment.cardId],
+        );
       }
 
       // 3. Update expenditure aggregates
@@ -519,13 +789,14 @@ class DatabaseHelper {
     });
   }
 
-  /// Get all payments with category info
+  /// Get all payments with category info (excluding soft-deleted)
   Future<List<Payment>> getAllPayments() async {
     final db = await database;
     final result = await db.rawQuery('''
       SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset
       FROM payments p
       LEFT JOIN categories c ON p.categoryId = c.id
+      WHERE p.isDeleted = 0
       ORDER BY p.date DESC
     ''');
     return result.map((json) => Payment.fromMap(json)).toList();
@@ -603,6 +874,12 @@ class DatabaseHelper {
                 [amountDiff, now, payment.cardId],
               );
             }
+
+            // Mark card as dirty so updated balance syncs to Supabase
+            await txn.execute(
+              "UPDATE cards SET syncStatus = 'PENDING_UPDATE' WHERE id = ? AND syncStatus = 'SYNCED'",
+              [payment.cardId],
+            );
           }
         }
       }
@@ -616,7 +893,7 @@ class DatabaseHelper {
     });
   }
 
-  /// Delete a payment
+  /// Delete a payment (soft delete for sync)
   Future<int> deletePayment(int id) async {
     final db = await database;
 
@@ -654,9 +931,28 @@ class DatabaseHelper {
               [payment.amount, now, payment.cardId],
             );
           }
+
+          // Mark card as dirty so restored balance syncs to Supabase
+          await txn.execute(
+            "UPDATE cards SET syncStatus = 'PENDING_UPDATE' WHERE id = ? AND syncStatus = 'SYNCED'",
+            [payment.cardId],
+          );
+        }
+
+        // Check if ever synced
+        final syncStatus = result.first['syncStatus'] as String?;
+        if (syncStatus == 'SYNCED' || syncStatus == 'PENDING_UPDATE') {
+          // Soft delete
+          return await txn.update(
+            'payments',
+            {'isDeleted': 1, 'syncStatus': 'PENDING_DELETE'},
+            where: 'id = ?',
+            whereArgs: [id],
+          );
         }
       }
 
+      // Never synced - just delete locally
       return await txn.delete('payments', where: 'id = ?', whereArgs: [id]);
     });
   }
@@ -771,13 +1067,19 @@ class DatabaseHelper {
   /// Insert a wishlist item
   Future<int> insertWishlistItem(Map<String, dynamic> item) async {
     final db = await database;
+    item['uuid'] ??= generateUuid();
+    item['syncStatus'] ??= SyncStatus.pendingCreate.dbValue;
     return await db.insert('wishlist', item);
   }
 
-  /// Get all wishlist items
+  /// Get all wishlist items (excluding soft-deleted)
   Future<List<Map<String, dynamic>>> getAllWishlistItems() async {
     final db = await database;
-    return await db.query('wishlist', orderBy: 'date_added DESC');
+    return await db.query(
+      'wishlist',
+      where: 'isDeleted = 0',
+      orderBy: 'date_added DESC',
+    );
   }
 
   /// Update a wishlist item
@@ -791,9 +1093,20 @@ class DatabaseHelper {
     );
   }
 
-  /// Delete a wishlist item
+  /// Delete a wishlist item (soft delete for sync)
   Future<int> deleteWishlistItem(int id) async {
     final db = await database;
+    final record = await db.query('wishlist', where: 'id = ?', whereArgs: [id]);
+    if (record.isNotEmpty &&
+        (record.first['syncStatus'] == 'SYNCED' ||
+            record.first['syncStatus'] == 'PENDING_UPDATE')) {
+      return await db.update(
+        'wishlist',
+        {'isDeleted': 1, 'syncStatus': 'PENDING_DELETE'},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
     return await db.delete('wishlist', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -935,7 +1248,10 @@ class DatabaseHelper {
   /// Insert a category (legacy support)
   Future<int> insertCategory(Category category) async {
     final db = await database;
-    return await db.insert('categories', category.toMap());
+    final map = category.toMap();
+    map['uuid'] ??= generateUuid();
+    map['syncStatus'] ??= SyncStatus.pendingCreate.dbValue;
+    return await db.insert('categories', map);
   }
 
   /// Update a category
@@ -1033,6 +1349,161 @@ class DatabaseHelper {
       ['%$query%', '%$query%'],
     );
     return result.map((json) => Payment.fromMap(json)).toList();
+  }
+
+  // ============================================================
+  // SYNC OPERATIONS
+  // ============================================================
+
+  static const _uuidGen = Uuid();
+
+  /// Generate a new UUID
+  String generateUuid() => _uuidGen.v4();
+
+  /// Get all records pending sync for a table
+  Future<List<Map<String, dynamic>>> getPendingSyncRecords(String table) async {
+    final db = await database;
+    return await db.query(
+      table,
+      where: 'syncStatus != ? AND (isDeleted = 0 OR syncStatus = ?)',
+      whereArgs: ['SYNCED', 'PENDING_DELETE'],
+    );
+  }
+
+  /// Get records pending create
+  Future<List<Map<String, dynamic>>> getPendingCreates(String table) async {
+    final db = await database;
+    return await db.query(
+      table,
+      where: 'syncStatus = ? AND isDeleted = 0',
+      whereArgs: ['PENDING_CREATE'],
+    );
+  }
+
+  /// Get records pending update
+  Future<List<Map<String, dynamic>>> getPendingUpdates(String table) async {
+    final db = await database;
+    return await db.query(
+      table,
+      where: 'syncStatus = ? AND isDeleted = 0',
+      whereArgs: ['PENDING_UPDATE'],
+    );
+  }
+
+  /// Get records pending delete
+  Future<List<Map<String, dynamic>>> getPendingDeletes(String table) async {
+    final db = await database;
+    return await db.query(
+      table,
+      where: 'syncStatus = ?',
+      whereArgs: ['PENDING_DELETE'],
+    );
+  }
+
+  /// Mark a record as synced
+  Future<void> markSynced(String table, int id) async {
+    final db = await database;
+    await db.update(
+      table,
+      {
+        'syncStatus': 'SYNCED',
+        'lastSyncedAt': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Mark a record as pending update
+  Future<void> markPendingUpdate(String table, int id) async {
+    final db = await database;
+    // Only change syncStatus if it's currently SYNCED (don't override PENDING_CREATE)
+    await db.execute(
+      "UPDATE $table SET syncStatus = 'PENDING_UPDATE' WHERE id = ? AND syncStatus = 'SYNCED'",
+      [id],
+    );
+  }
+
+  /// Soft delete a record (mark for sync deletion)
+  Future<void> markPendingDelete(String table, int id) async {
+    final db = await database;
+    await db.update(
+      table,
+      {'isDeleted': 1, 'syncStatus': 'PENDING_DELETE'},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Permanently remove records that have been synced as deleted
+  Future<void> purgeDeletedRecords(String table) async {
+    final db = await database;
+    await db.delete(
+      table,
+      where: 'isDeleted = 1 AND syncStatus = ?',
+      whereArgs: ['SYNCED'],
+    );
+  }
+
+  /// Get a record by UUID
+  Future<Map<String, dynamic>?> getByUuid(String table, String uuid) async {
+    final db = await database;
+    final result = await db.query(table, where: 'uuid = ?', whereArgs: [uuid]);
+    return result.isNotEmpty ? result.first : null;
+  }
+
+  /// Upsert a record from remote (by UUID)
+  Future<void> upsertFromRemote(String table, Map<String, dynamic> data) async {
+    final db = await database;
+    final uuid = data['uuid'];
+    if (uuid == null) return;
+
+    final existing = await db.query(
+      table,
+      where: 'uuid = ?',
+      whereArgs: [uuid],
+    );
+
+    if (existing.isEmpty) {
+      // Insert new record from remote
+      data['syncStatus'] = 'SYNCED';
+      data['lastSyncedAt'] = DateTime.now().toIso8601String();
+      await db.insert(table, data, conflictAlgorithm: ConflictAlgorithm.ignore);
+    } else {
+      final local = existing.first;
+      final localSync = local['syncStatus'] as String?;
+
+      // Only update if local is synced (no pending local changes)
+      if (localSync == 'SYNCED') {
+        data['syncStatus'] = 'SYNCED';
+        data['lastSyncedAt'] = DateTime.now().toIso8601String();
+        data.remove('id'); // Don't overwrite local ID
+        await db.update(table, data, where: 'uuid = ?', whereArgs: [uuid]);
+      }
+      // If local has pending changes, local wins (last-write-wins after sync)
+    }
+  }
+
+  /// Get UUID mapping: localId -> uuid for a table
+  Future<Map<int, String>> getUuidMapping(String table) async {
+    final db = await database;
+    final result = await db.query(
+      table,
+      columns: ['id', 'uuid'],
+      where: 'uuid IS NOT NULL',
+    );
+    return {for (final row in result) row['id'] as int: row['uuid'] as String};
+  }
+
+  /// Get reverse UUID mapping: uuid -> localId for a table
+  Future<Map<String, int>> getReverseUuidMapping(String table) async {
+    final db = await database;
+    final result = await db.query(
+      table,
+      columns: ['id', 'uuid'],
+      where: 'uuid IS NOT NULL',
+    );
+    return {for (final row in result) row['uuid'] as String: row['id'] as int};
   }
 
   // ============================================================
@@ -1170,4 +1641,3 @@ class DatabaseHelper {
     }
   }
 }
-

@@ -39,6 +39,44 @@ enum AccountType {
   }
 }
 
+/// Sync status for offline-first architecture
+enum SyncStatus {
+  synced,
+  pendingCreate,
+  pendingUpdate,
+  pendingDelete;
+
+  String get dbValue {
+    switch (this) {
+      case SyncStatus.synced:
+        return 'SYNCED';
+      case SyncStatus.pendingCreate:
+        return 'PENDING_CREATE';
+      case SyncStatus.pendingUpdate:
+        return 'PENDING_UPDATE';
+      case SyncStatus.pendingDelete:
+        return 'PENDING_DELETE';
+    }
+  }
+
+  static SyncStatus fromString(String? value) {
+    switch (value) {
+      case 'SYNCED':
+        return SyncStatus.synced;
+      case 'PENDING_CREATE':
+        return SyncStatus.pendingCreate;
+      case 'PENDING_UPDATE':
+        return SyncStatus.pendingUpdate;
+      case 'PENDING_DELETE':
+        return SyncStatus.pendingDelete;
+      default:
+        return SyncStatus.pendingCreate;
+    }
+  }
+
+  bool get isPending => this != SyncStatus.synced;
+}
+
 /// Bank Card / Payment Source model
 /// Supports Cash, Debit Cards, and Credit Cards
 class BankCard {
@@ -57,6 +95,12 @@ class BankCard {
   final double creditLimit; // Only for Credit Cards
   final double usedAmount; // Only for Credit Cards (amount already spent)
 
+  // Sync fields for offline-first architecture
+  final String? uuid;
+  final SyncStatus syncStatus;
+  final String? lastSyncedAt;
+  final bool isDeleted;
+
   const BankCard({
     this.id,
     required this.bankName,
@@ -70,6 +114,10 @@ class BankCard {
     this.accountType = AccountType.debit,
     this.creditLimit = 0,
     this.usedAmount = 0,
+    this.uuid,
+    this.syncStatus = SyncStatus.pendingCreate,
+    this.lastSyncedAt,
+    this.isDeleted = false,
   });
 
   /// For Credit Cards: Available credit = Limit - Used
@@ -121,6 +169,26 @@ class BankCard {
     'accountType': accountType.dbValue,
     'creditLimit': creditLimit,
     'usedAmount': usedAmount,
+    'uuid': uuid,
+    'syncStatus': syncStatus.dbValue,
+    'lastSyncedAt': lastSyncedAt,
+    'isDeleted': isDeleted ? 1 : 0,
+  };
+
+  /// Convert to Supabase-compatible map (remote schema)
+  Map<String, dynamic> toSupabaseMap() => {
+    'uuid': uuid,
+    'bank_name': bankName,
+    'balance': balance,
+    'date': date,
+    'type': type,
+    'is_primary': isPrimary,
+    'created_at': createdAt,
+    'updated_at': updatedAt,
+    'account_type': accountType.dbValue,
+    'credit_limit': creditLimit,
+    'used_amount': usedAmount,
+    'is_deleted': isDeleted,
   };
 
   factory BankCard.fromMap(Map<String, dynamic> map) => BankCard(
@@ -135,6 +203,28 @@ class BankCard {
     accountType: AccountType.fromString(map['accountType']),
     creditLimit: (map['creditLimit'] ?? 0).toDouble(),
     usedAmount: (map['usedAmount'] ?? 0).toDouble(),
+    uuid: map['uuid'],
+    syncStatus: SyncStatus.fromString(map['syncStatus']),
+    lastSyncedAt: map['lastSyncedAt'],
+    isDeleted: (map['isDeleted'] ?? 0) == 1,
+  );
+
+  /// Create from Supabase row (remote schema uses snake_case)
+  factory BankCard.fromSupabaseMap(Map<String, dynamic> map) => BankCard(
+    bankName: map['bank_name'] ?? '',
+    balance: (map['balance'] ?? 0).toDouble(),
+    date: map['date'] ?? '',
+    type: map['type'] ?? 'Debit',
+    isPrimary: map['is_primary'] == true,
+    createdAt: map['created_at'],
+    updatedAt: map['updated_at'],
+    accountType: AccountType.fromString(map['account_type']),
+    creditLimit: (map['credit_limit'] ?? 0).toDouble(),
+    usedAmount: (map['used_amount'] ?? 0).toDouble(),
+    uuid: map['uuid'],
+    syncStatus: SyncStatus.synced,
+    lastSyncedAt: DateTime.now().toIso8601String(),
+    isDeleted: map['is_deleted'] == true,
   );
 
   BankCard copyWith({
@@ -150,6 +240,10 @@ class BankCard {
     AccountType? accountType,
     double? creditLimit,
     double? usedAmount,
+    String? uuid,
+    SyncStatus? syncStatus,
+    String? lastSyncedAt,
+    bool? isDeleted,
   }) {
     return BankCard(
       id: id ?? this.id,
@@ -164,6 +258,10 @@ class BankCard {
       accountType: accountType ?? this.accountType,
       creditLimit: creditLimit ?? this.creditLimit,
       usedAmount: usedAmount ?? this.usedAmount,
+      uuid: uuid ?? this.uuid,
+      syncStatus: syncStatus ?? this.syncStatus,
+      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 

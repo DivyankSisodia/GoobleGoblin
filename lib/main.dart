@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:toastification/toastification.dart';
 
 import 'core/DB/db_helper.dart';
+import 'core/services/connectivity_service.dart';
+import 'core/services/supabase_config.dart';
+import 'core/services/sync_engine.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/notification_service.dart';
 import 'features/main_screen.dart';
@@ -17,6 +20,17 @@ void main() async {
 
   // Initialize Database on startup
   await DatabaseHelper.instance.database;
+
+  // Initialize connectivity monitoring
+  await ConnectivityService.instance.initialize();
+
+  // Initialize Supabase (non-blocking - app works offline if this fails)
+  if (SupabaseConfig.isConfigured) {
+    await SupabaseConfig.initialize();
+  }
+
+  // Initialize sync engine (handles background sync)
+  SyncEngine.instance.initialize();
 
   runApp(const ProviderScope(child: GoobleGoblinApp()));
 }
