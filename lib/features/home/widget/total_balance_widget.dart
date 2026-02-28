@@ -15,6 +15,7 @@ class TotalBalanceWidget extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final totalBalance = ref.watch(totalBalanceProvider);
     final analyticsState = ref.watch(analyticsProvider);
+    final isVisible = ref.watch(balanceVisibilityProvider);
 
     // Calculate trend from analytics if available
     final trendValue = analyticsState.analytics?.totalSpending ?? 0;
@@ -40,10 +41,11 @@ class TotalBalanceWidget extends ConsumerWidget {
                 ),
                 IconButton(
                   onPressed: () {
-                    // Toggle visibility logic could go here
+                    ref.read(balanceVisibilityProvider.notifier).state =
+                        !isVisible;
                   },
-                  icon: const Icon(
-                    CupertinoIcons.eye,
+                  icon: Icon(
+                    isVisible ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
                     color: Colors.white54,
                     size: 20,
                   ),
@@ -58,7 +60,7 @@ class TotalBalanceWidget extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  CurrencyUtils.format(totalBalance),
+                  isVisible ? CurrencyUtils.format(totalBalance) : '•••••••',
                   style: GoogleFonts.montserrat(
                     color: Colors.white,
                     fontSize: 32,
@@ -119,7 +121,9 @@ class TotalBalanceWidget extends ConsumerWidget {
                 ),
                 const Gap(12),
                 Text(
-                  'Spent ${CurrencyUtils.formatCompact(trendValue)}',
+                  isVisible
+                      ? 'Spent ${CurrencyUtils.formatCompact(trendValue)}'
+                      : 'Spent •••',
                   style: GoogleFonts.montserrat(
                     color: Colors.white54,
                     fontSize: 13,

@@ -68,8 +68,8 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
                   final cardType = selectedTabIndex == 0
                       ? 'Debit'
                       : selectedTabIndex == 1
-                          ? 'Credit'
-                          : 'Cash';
+                      ? 'Credit'
+                      : 'Cash';
                   AppBottomSheet.showManageCardsBottomSheet(
                     context,
                     ref,
@@ -145,8 +145,8 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
                             selectedTabIndex == 0
                                 ? Icons.account_balance_wallet_outlined
                                 : selectedTabIndex == 1
-                                    ? Icons.credit_card_off_outlined
-                                    : Icons.money_off_outlined,
+                                ? Icons.credit_card_off_outlined
+                                : Icons.money_off_outlined,
                             color: Colors.white10,
                             size: 80,
                           ),
@@ -155,8 +155,8 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
                             selectedTabIndex == 0
                                 ? 'No debit cards found'
                                 : selectedTabIndex == 1
-                                    ? 'No credit cards found'
-                                    : 'No cash entries found',
+                                ? 'No credit cards found'
+                                : 'No cash entries found',
                             style: GoogleFonts.montserrat(
                               color: Colors.white38,
                               fontSize: 16,

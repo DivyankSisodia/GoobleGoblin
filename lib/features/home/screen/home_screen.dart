@@ -101,6 +101,7 @@ class HomeScreen extends ConsumerWidget {
         onRefresh: () async {
           await ref.read(paymentsProvider.notifier).loadPayments();
           await ref.read(cardsProvider.notifier).loadCards();
+          ref.invalidate(monthlyBudgetProvider);
         },
         color: AppColors.primaryNeon,
         backgroundColor: AppColors.surface,

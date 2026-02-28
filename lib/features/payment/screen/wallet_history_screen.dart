@@ -25,7 +25,7 @@ class WalletHistoryScreen extends ConsumerStatefulWidget {
 }
 
 class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
-  final List<String> _tabs = ['All','Wishlist', 'Recurring', 'Recent', ];
+  final List<String> _tabs = ['All', 'Wishlist', 'Recurring', 'Recent'];
   int _selectedTabIndex = 0;
 
   @override
@@ -385,6 +385,7 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
       endActionPane: ActionPane(
         motion: const ScrollMotion(),
         children: [
+          Gap(8),
           SlidableAction(
             onPressed: (context) {
               Navigator.push(
@@ -401,6 +402,7 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
             label: 'Edit',
             borderRadius: BorderRadius.circular(16),
           ),
+          Gap(8),
           SlidableAction(
             onPressed: (context) => _confirmDeletePayment(payment),
             backgroundColor: AppColors.errorRed,

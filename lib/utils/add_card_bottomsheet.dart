@@ -5,7 +5,6 @@ import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../core/models/card.dart';
-import '../core/models/payment.dart';
 import '../core/theme/app_theme.dart';
 import '../core/utils/currency_utils.dart';
 import '../features/cards/widget/card_preview_widget.dart';
@@ -29,6 +28,8 @@ class AppBottomSheet {
           builder: (context, setState) {
             final isCredit = selectedTabIndex == 1;
             final isCash = selectedTabIndex == 2;
+            final hasExistingCash =
+                isCash && ref.read(cardsProvider).cards.any((c) => c.isCash);
 
             return Container(
               padding: EdgeInsets.only(
@@ -54,7 +55,7 @@ class AppBottomSheet {
                   ),
                   const Gap(24),
                   Text(
-                    'Add New Source',
+                    hasExistingCash ? 'Add Cash' : 'Add New Source',
                     style: GoogleFonts.montserrat(
                       color: Colors.white,
                       fontSize: 24,
@@ -81,6 +82,18 @@ class AppBottomSheet {
                     bankName: bankNameController.text,
                     balance: isCredit
                         ? creditLimitController.text
+                        : hasExistingCash
+                        ? (() {
+                            final existingCash = ref
+                                .read(cardsProvider)
+                                .cards
+                                .where((c) => c.isCash)
+                                .first;
+                            final added =
+                                double.tryParse(amountController.text) ?? 0.0;
+                            return (existingCash.balance + added)
+                                .toStringAsFixed(2);
+                          })()
                         : amountController.text,
                     isCredit: isCredit,
                   ),
@@ -104,7 +117,11 @@ class AppBottomSheet {
                   else
                     _buildField(
                       controller: amountController,
-                      hint: isCash ? 'Initial Cash Amount' : 'Current Balance',
+                      hint: hasExistingCash
+                          ? 'Amount to Add'
+                          : isCash
+                          ? 'Initial Cash Amount'
+                          : 'Current Balance',
                       icon: Icons.currency_rupee_rounded,
                       keyboardType: TextInputType.number,
                       onChanged: (val) => setState(() {}),
@@ -120,12 +137,12 @@ class AppBottomSheet {
                           final amount = isCredit
                               ? 0.0
                               : double.tryParse(amountController.text.trim()) ??
-                                  0.0;
+                                    0.0;
                           final limit = isCredit
                               ? double.tryParse(
-                                    creditLimitController.text.trim(),
-                                  ) ??
-                                  0.0
+                                      creditLimitController.text.trim(),
+                                    ) ??
+                                    0.0
                               : 0.0;
 
                           if (!isCash && name.isEmpty) {
@@ -137,10 +154,42 @@ class AppBottomSheet {
                             return;
                           }
 
-                          BankCard card;
                           if (isCash) {
-                            card = BankCard.cash(balance: amount);
-                          } else if (isCredit) {
+                            // Check if a cash card already exists — if so, top it up
+                            final existingCash = ref
+                                .read(cardsProvider)
+                                .cards
+                                .where((c) => c.isCash)
+                                .firstOrNull;
+
+                            bool success;
+                            if (existingCash != null) {
+                              final updatedCash = existingCash.copyWith(
+                                balance: existingCash.balance + amount,
+                              );
+                              success = await ref
+                                  .read(cardsProvider.notifier)
+                                  .updateCard(updatedCash);
+                            } else {
+                              success = await ref
+                                  .read(cardsProvider.notifier)
+                                  .addCard(BankCard.cash(balance: amount));
+                            }
+
+                            if (success && context.mounted) {
+                              Navigator.pop(context);
+                            } else if (!success && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Failed to save cash entry'),
+                                ),
+                              );
+                            }
+                            return;
+                          }
+
+                          BankCard card;
+                          if (isCredit) {
                             card = BankCard.credit(
                               bankName: name,
                               creditLimit: limit,
@@ -587,7 +636,9 @@ class AppBottomSheet {
                       ),
                       const Gap(24),
                       Text(
-                        selectedCard == null ? 'Add Money' : 'Add Money to ${selectedCard!.bankName}',
+                        selectedCard == null
+                            ? 'Add Money'
+                            : 'Add Money to ${selectedCard!.bankName}',
                         style: GoogleFonts.montserrat(
                           color: Colors.white,
                           fontSize: 24,
@@ -620,26 +671,35 @@ class AppBottomSheet {
                                   itemBuilder: (context, index) {
                                     final card = cards[index];
                                     return GestureDetector(
-                                      onTap: () => setState(() => selectedCard = card),
+                                      onTap: () =>
+                                          setState(() => selectedCard = card),
                                       child: Container(
                                         padding: const EdgeInsets.all(16),
                                         decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha: 0.05),
-                                          borderRadius: BorderRadius.circular(16),
-                                          border: Border.all(color: Colors.white10),
+                                          color: Colors.white.withValues(
+                                            alpha: 0.05,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.white10,
+                                          ),
                                         ),
                                         child: Row(
                                           children: [
                                             Container(
                                               padding: const EdgeInsets.all(10),
                                               decoration: BoxDecoration(
-                                                color: AppColors.primaryNeon.withValues(alpha: 0.1),
+                                                color: AppColors.primaryNeon
+                                                    .withValues(alpha: 0.1),
                                                 shape: BoxShape.circle,
                                               ),
                                               child: Icon(
                                                 card.isCredit
                                                     ? Icons.credit_card
-                                                    : Icons.account_balance_wallet,
+                                                    : Icons
+                                                          .account_balance_wallet,
                                                 color: AppColors.primaryNeon,
                                                 size: 20,
                                               ),
@@ -647,20 +707,25 @@ class AppBottomSheet {
                                             const Gap(16),
                                             Expanded(
                                               child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
                                                     card.bankName,
                                                     style: const TextStyle(
                                                       color: Colors.white,
                                                       fontSize: 16,
-                                                      fontWeight: FontWeight.bold,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                     ),
                                                   ),
                                                   Text(
                                                     'Current: ${CurrencyUtils.format(card.balance)}',
                                                     style: TextStyle(
-                                                      color: Colors.white.withValues(alpha: 0.5),
+                                                      color: Colors.white
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          ),
                                                       fontSize: 14,
                                                     ),
                                                   ),
@@ -681,7 +746,11 @@ class AppBottomSheet {
                       ] else ...[
                         CardPreviewWidget(
                           bankName: selectedCard!.bankName,
-                          balance: (selectedCard!.balance + (double.tryParse(amountController.text) ?? 0.0)).toStringAsFixed(2),
+                          balance:
+                              (selectedCard!.balance +
+                                      (double.tryParse(amountController.text) ??
+                                          0.0))
+                                  .toStringAsFixed(2),
                           isCredit: selectedCard!.isCredit,
                         ),
                         const Gap(24),
@@ -697,7 +766,8 @@ class AppBottomSheet {
                           children: [
                             Expanded(
                               child: OutlinedButton(
-                                onPressed: () => setState(() => selectedCard = null),
+                                onPressed: () =>
+                                    setState(() => selectedCard = null),
                                 child: const Text('BACK'),
                               ),
                             ),
@@ -706,11 +776,17 @@ class AppBottomSheet {
                               flex: 2,
                               child: ElevatedButton(
                                 onPressed: () async {
-                                  final amount = double.tryParse(amountController.text.trim()) ?? 0.0;
+                                  final amount =
+                                      double.tryParse(
+                                        amountController.text.trim(),
+                                      ) ??
+                                      0.0;
                                   if (amount <= 0) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                        content: Text('Please enter a valid amount'),
+                                        content: Text(
+                                          'Please enter a valid amount',
+                                        ),
                                       ),
                                     );
                                     return;
@@ -726,29 +802,20 @@ class AppBottomSheet {
                                         .updateCard(updatedCard);
 
                                     if (success && context.mounted) {
-                                      // Create income transaction record
-                                      final transaction = Payment(
-                                        amount: amount,
-                                        cardId: selectedCard!.id!,
-                                        note: 'Money added to ${selectedCard!.bankName}',
-                                        date: DateTime.now().toIso8601String(),
-                                        categoryId: 1, // Income category ID
-                                        isRecurring: false,
-                                        reminderNotification: false
-                                      );
-
-                                      await ref
-                                          .read(paymentsProvider.notifier)
-                                          .addPayment(transaction);
-
                                       Navigator.pop(context);
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         SnackBar(
-                                          content: Text('Added ${CurrencyUtils.format(amount)} to ${selectedCard!.bankName}'),
+                                          content: Text(
+                                            'Added ${CurrencyUtils.format(amount)} to ${selectedCard!.bankName}',
+                                          ),
                                         ),
                                       );
                                     } else if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         const SnackBar(
                                           content: Text('Failed to add money'),
                                         ),
@@ -756,7 +823,9 @@ class AppBottomSheet {
                                     }
                                   } catch (e) {
                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         SnackBar(
                                           content: Text('Error: $e'),
                                           duration: const Duration(seconds: 5),
