@@ -43,16 +43,6 @@ class Category {
     'isDeleted': isDeleted ? 1 : 0,
   };
 
-  /// Convert to Supabase-compatible map
-  Map<String, dynamic> toSupabaseMap() => {
-    'uuid': uuid,
-    'label': label,
-    'icon': icon,
-    'asset_path': assetPath,
-    'is_predefined': isPredefined,
-    'is_deleted': isDeleted,
-  };
-
   factory Category.fromMap(Map<String, dynamic> map) => Category(
     id: map['id'],
     label: map['label'] ?? '',
@@ -63,18 +53,6 @@ class Category {
     syncStatus: SyncStatus.fromString(map['syncStatus']),
     lastSyncedAt: map['lastSyncedAt'],
     isDeleted: (map['isDeleted'] ?? 0) == 1,
-  );
-
-  /// Create from Supabase row
-  factory Category.fromSupabaseMap(Map<String, dynamic> map) => Category(
-    label: map['label'] ?? '',
-    icon: map['icon'] ?? '',
-    assetPath: map['asset_path'],
-    isPredefined: map['is_predefined'] == true,
-    uuid: map['uuid'],
-    syncStatus: SyncStatus.synced,
-    lastSyncedAt: DateTime.now().toIso8601String(),
-    isDeleted: map['is_deleted'] == true,
   );
 
   Category copyWith({

@@ -149,8 +149,9 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
       return payments.any((p) => p.categoryId == cat.id);
     }).toList();
 
-    if (spentCategories.isEmpty)
+    if (spentCategories.isEmpty) {
       return _emptyState('No spending by category yet');
+    }
 
     return ListView.separated(
       shrinkWrap: true,

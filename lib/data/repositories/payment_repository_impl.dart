@@ -239,6 +239,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
           COUNT(*) as count
         FROM payments
         WHERE date >= date('now', '-$days days')
+          AND isDeleted = 0
         GROUP BY date(date)
         ORDER BY day ASC
       ''');
@@ -280,11 +281,16 @@ class PaymentRepositoryImpl implements PaymentRepository {
         ];
       }
 
+      // Build where clause with isDeleted filter
+      final filteredWhereClause = whereClause == '1=1'
+          ? 'p.isDeleted = 0'
+          : '$whereClause AND p.isDeleted = 0';
+
       // First get total spending for percentage calculation
       final totalResult = await db.rawQuery('''
         SELECT COALESCE(SUM(amount), 0) as total
         FROM payments p
-        WHERE $whereClause
+        WHERE $filteredWhereClause
       ''', whereArgs);
 
       final totalSpending =
@@ -300,7 +306,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
           COUNT(p.id) as transactionCount
         FROM payments p
         LEFT JOIN categories c ON p.categoryId = c.id
-        WHERE $whereClause
+        WHERE $filteredWhereClause
         GROUP BY p.categoryId
         ORDER BY totalAmount DESC
       ''', whereArgs);
@@ -348,6 +354,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
           COUNT(*) as transactionCount
         FROM payments
         WHERE date(date) BETWEEN date(?) AND date(?)
+          AND isDeleted = 0
       ''',
         [startStr, endStr],
       );
@@ -386,6 +393,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
           SUM(amount) as total
         FROM payments
         WHERE date(date) BETWEEN date(?) AND date(?)
+          AND isDeleted = 0
         GROUP BY date(date)
         ORDER BY day ASC
       ''',
@@ -405,6 +413,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
           SUM(amount) as total
         FROM payments
         WHERE date(date) >= date('now', '-12 months')
+          AND isDeleted = 0
         GROUP BY strftime('%Y-%m', date)
         ORDER BY month ASC
       ''');
@@ -426,6 +435,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
         SELECT COALESCE(SUM(amount), 0) as total
         FROM payments
         WHERE date(date) BETWEEN date(?) AND date(?)
+          AND isDeleted = 0
       ''',
         [
           AppDateUtils.formatIso(previousStart),

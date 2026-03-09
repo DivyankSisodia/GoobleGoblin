@@ -42,192 +42,196 @@ class AppBottomSheet {
                 color: AppColors.surface,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(2),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                  ),
-                  const Gap(24),
-                  Text(
-                    hasExistingCash ? 'Add Cash' : 'Add New Source',
-                    style: GoogleFonts.montserrat(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+                    const Gap(24),
+                    Text(
+                      hasExistingCash ? 'Add Cash' : 'Add New Source',
+                      style: GoogleFonts.montserrat(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const Gap(24),
-                  CustomSegmentedTabBar(
-                    tabs: const ['Debit', 'Credit', 'Cash'],
-                    selectedIndex: selectedTabIndex,
-                    onChanged: (index) {
-                      setState(() {
-                        selectedTabIndex = index;
-                        if (index == 2) {
-                          bankNameController.text = 'Cash';
-                        } else if (bankNameController.text == 'Cash') {
-                          bankNameController.clear();
-                        }
-                      });
-                    },
-                  ),
-                  const Gap(24),
-                  CardPreviewWidget(
-                    bankName: bankNameController.text,
-                    balance: isCredit
-                        ? creditLimitController.text
-                        : hasExistingCash
-                        ? (() {
-                            final existingCash = ref
-                                .read(cardsProvider)
-                                .cards
-                                .where((c) => c.isCash)
-                                .first;
-                            final added =
-                                double.tryParse(amountController.text) ?? 0.0;
-                            return (existingCash.balance + added)
-                                .toStringAsFixed(2);
-                          })()
-                        : amountController.text,
-                    isCredit: isCredit,
-                  ),
-                  const Gap(24),
-                  if (!isCash)
-                    _buildField(
-                      controller: bankNameController,
-                      hint: 'Bank/Provider Name',
-                      icon: Icons.account_balance_rounded,
-                      onChanged: (val) => setState(() {}),
-                    ),
-                  if (!isCash) const Gap(16),
-                  if (isCredit)
-                    _buildField(
-                      controller: creditLimitController,
-                      hint: 'Credit Limit',
-                      icon: Icons.speed_rounded,
-                      keyboardType: TextInputType.number,
-                      onChanged: (val) => setState(() {}),
-                    )
-                  else
-                    _buildField(
-                      controller: amountController,
-                      hint: hasExistingCash
-                          ? 'Amount to Add'
-                          : isCash
-                          ? 'Initial Cash Amount'
-                          : 'Current Balance',
-                      icon: Icons.currency_rupee_rounded,
-                      keyboardType: TextInputType.number,
-                      onChanged: (val) => setState(() {}),
-                    ),
-                  const Gap(32),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        try {
-                          final name = bankNameController.text.trim();
-                          final amount = isCredit
-                              ? 0.0
-                              : double.tryParse(amountController.text.trim()) ??
-                                    0.0;
-                          final limit = isCredit
-                              ? double.tryParse(
-                                      creditLimitController.text.trim(),
-                                    ) ??
-                                    0.0
-                              : 0.0;
-
-                          if (!isCash && name.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Please enter a bank name'),
-                              ),
-                            );
-                            return;
+                    const Gap(24),
+                    CustomSegmentedTabBar(
+                      tabs: const ['Debit', 'Credit', 'Cash'],
+                      selectedIndex: selectedTabIndex,
+                      onChanged: (index) {
+                        setState(() {
+                          selectedTabIndex = index;
+                          if (index == 2) {
+                            bankNameController.text = 'Cash';
+                          } else if (bankNameController.text == 'Cash') {
+                            bankNameController.clear();
                           }
+                        });
+                      },
+                    ),
+                    const Gap(24),
+                    CardPreviewWidget(
+                      bankName: bankNameController.text,
+                      balance: isCredit
+                          ? creditLimitController.text
+                          : hasExistingCash
+                          ? (() {
+                              final existingCash = ref
+                                  .read(cardsProvider)
+                                  .cards
+                                  .where((c) => c.isCash)
+                                  .first;
+                              final added =
+                                  double.tryParse(amountController.text) ?? 0.0;
+                              return (existingCash.balance + added)
+                                  .toStringAsFixed(2);
+                            })()
+                          : amountController.text,
+                      isCredit: isCredit,
+                    ),
+                    const Gap(24),
+                    if (!isCash)
+                      _buildField(
+                        controller: bankNameController,
+                        hint: 'Bank/Provider Name',
+                        icon: Icons.account_balance_rounded,
+                        onChanged: (val) => setState(() {}),
+                      ),
+                    if (!isCash) const Gap(16),
+                    if (isCredit)
+                      _buildField(
+                        controller: creditLimitController,
+                        hint: 'Credit Limit',
+                        icon: Icons.speed_rounded,
+                        keyboardType: TextInputType.number,
+                        onChanged: (val) => setState(() {}),
+                      )
+                    else
+                      _buildField(
+                        controller: amountController,
+                        hint: hasExistingCash
+                            ? 'Amount to Add'
+                            : isCash
+                            ? 'Initial Cash Amount'
+                            : 'Current Balance',
+                        icon: Icons.currency_rupee_rounded,
+                        keyboardType: TextInputType.number,
+                        onChanged: (val) => setState(() {}),
+                      ),
+                    const Gap(32),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          try {
+                            final name = bankNameController.text.trim();
+                            final amount = isCredit
+                                ? 0.0
+                                : double.tryParse(
+                                        amountController.text.trim(),
+                                      ) ??
+                                      0.0;
+                            final limit = isCredit
+                                ? double.tryParse(
+                                        creditLimitController.text.trim(),
+                                      ) ??
+                                      0.0
+                                : 0.0;
 
-                          if (isCash) {
-                            // Check if a cash card already exists — if so, top it up
-                            final existingCash = ref
-                                .read(cardsProvider)
-                                .cards
-                                .where((c) => c.isCash)
-                                .firstOrNull;
-
-                            bool success;
-                            if (existingCash != null) {
-                              final updatedCash = existingCash.copyWith(
-                                balance: existingCash.balance + amount,
+                            if (!isCash && name.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please enter a bank name'),
+                                ),
                               );
-                              success = await ref
-                                  .read(cardsProvider.notifier)
-                                  .updateCard(updatedCash);
-                            } else {
-                              success = await ref
-                                  .read(cardsProvider.notifier)
-                                  .addCard(BankCard.cash(balance: amount));
+                              return;
                             }
 
+                            if (isCash) {
+                              // Check if a cash card already exists — if so, top it up
+                              final existingCash = ref
+                                  .read(cardsProvider)
+                                  .cards
+                                  .where((c) => c.isCash)
+                                  .firstOrNull;
+
+                              bool success;
+                              if (existingCash != null) {
+                                final updatedCash = existingCash.copyWith(
+                                  balance: existingCash.balance + amount,
+                                );
+                                success = await ref
+                                    .read(cardsProvider.notifier)
+                                    .updateCard(updatedCash);
+                              } else {
+                                success = await ref
+                                    .read(cardsProvider.notifier)
+                                    .addCard(BankCard.cash(balance: amount));
+                              }
+
+                              if (success && context.mounted) {
+                                Navigator.pop(context);
+                              } else if (!success && context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Failed to save cash entry'),
+                                  ),
+                                );
+                              }
+                              return;
+                            }
+
+                            BankCard card;
+                            if (isCredit) {
+                              card = BankCard.credit(
+                                bankName: name,
+                                creditLimit: limit,
+                              );
+                            } else {
+                              card = BankCard.debit(
+                                bankName: name,
+                                balance: amount,
+                              );
+                            }
+
+                            final success = await ref
+                                .read(cardsProvider.notifier)
+                                .addCard(card);
                             if (success && context.mounted) {
                               Navigator.pop(context);
                             } else if (!success && context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Failed to save cash entry'),
+                                  content: Text('Failed to save card'),
                                 ),
                               );
                             }
-                            return;
-                          }
-
-                          BankCard card;
-                          if (isCredit) {
-                            card = BankCard.credit(
-                              bankName: name,
-                              creditLimit: limit,
-                            );
-                          } else {
-                            card = BankCard.debit(
-                              bankName: name,
-                              balance: amount,
-                            );
-                          }
-
-                          final success = await ref
-                              .read(cardsProvider.notifier)
-                              .addCard(card);
-                          if (success && context.mounted) {
-                            Navigator.pop(context);
-                          } else if (!success && context.mounted) {
+                          } catch (e, stackTrace) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Failed to save card'),
+                              SnackBar(
+                                content: Text('Error: $e'),
+                                duration: const Duration(seconds: 5),
                               ),
                             );
+                            debugPrint('Error saving card: $e');
+                            debugPrint('Stack trace: $stackTrace');
                           }
-                        } catch (e, stackTrace) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Error: $e'),
-                              duration: const Duration(seconds: 5),
-                            ),
-                          );
-                          debugPrint('Error saving card: $e');
-                          debugPrint('Stack trace: $stackTrace');
-                        }
-                      },
-                      child: const Text('SAVE SOURCE'),
+                        },
+                        child: const Text('SAVE SOURCE'),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             );
           },
@@ -278,200 +282,206 @@ class AppBottomSheet {
                       top: Radius.circular(32),
                     ),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      const Gap(24),
-                      Text(
-                        isEditing
-                            ? 'Edit ${selectedCard?.accountType.displayName}'
-                            : 'Pick a Source',
-                        style: GoogleFonts.montserrat(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Gap(24),
-                      if (!isEditing)
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxHeight: MediaQuery.of(context).size.height * 0.4,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(2),
                           ),
-                          child: filteredCards.isEmpty
-                              ? const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 32),
-                                  child: Text('Nothing found here'),
-                                )
-                              : ListView.separated(
-                                  shrinkWrap: true,
-                                  itemCount: filteredCards.length,
-                                  separatorBuilder: (_, __) => const Gap(12),
-                                  itemBuilder: (context, index) {
-                                    final card = filteredCards[index];
-                                    return GestureDetector(
-                                      onTap: () {
-                                        setState(() {
-                                          selectedCard = card;
-                                          isEditing = true;
-                                          bankNameController.text =
-                                              card.bankName;
-                                          amountController.text = card.balance
-                                              .toString();
-                                          limitController.text = card
-                                              .creditLimit
-                                              .toString();
-                                          usedController.text = card.usedAmount
-                                              .toString();
-                                          isPrimary = card.isPrimary;
-                                        });
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.all(16),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.05,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                          border: Border.all(
-                                            color: Colors.white10,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.all(10),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.primaryNeon
-                                                    .withValues(alpha: 0.1),
-                                                shape: BoxShape.circle,
-                                              ),
-                                              child: Icon(
-                                                card.isCredit
-                                                    ? Icons.credit_card
-                                                    : Icons
-                                                          .account_balance_wallet,
-                                                color: AppColors.primaryNeon,
-                                                size: 20,
-                                              ),
-                                            ),
-                                            const Gap(16),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    card.bankName,
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 16,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    'Balance: ₹${card.displayBalance}',
-                                                    style: TextStyle(
-                                                      color: Colors.white
-                                                          .withValues(
-                                                            alpha: 0.5,
-                                                          ),
-                                                      fontSize: 14,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            const Icon(
-                                              Icons.chevron_right,
-                                              color: Colors.white24,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                        )
-                      else ...[
-                        CardPreviewWidget(
-                          bankName: bankNameController.text,
-                          balance: selectedCard!.isCredit
-                              ? limitController.text
-                              : amountController.text,
-                          isCredit: selectedCard!.isCredit,
                         ),
                         const Gap(24),
-                        if (!selectedCard!.isCash)
-                          _buildField(
-                            controller: bankNameController,
-                            hint: 'Bank Name',
-                            icon: Icons.account_balance_rounded,
-                            onChanged: (val) => setState(() {}),
+                        Text(
+                          isEditing
+                              ? 'Edit ${selectedCard?.accountType.displayName}'
+                              : 'Pick a Source',
+                          style: GoogleFonts.montserrat(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
                           ),
-                        const Gap(16),
-                        if (selectedCard!.isCredit) ...[
-                          _buildField(
-                            controller: limitController,
-                            hint: 'Limit',
-                            icon: Icons.speed_rounded,
-                            keyboardType: TextInputType.number,
-                            onChanged: (val) => setState(() {}),
+                        ),
+                        const Gap(24),
+                        if (!isEditing)
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight:
+                                  MediaQuery.of(context).size.height * 0.4,
+                            ),
+                            child: filteredCards.isEmpty
+                                ? const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 32),
+                                    child: Text('Nothing found here'),
+                                  )
+                                : ListView.separated(
+                                    shrinkWrap: true,
+                                    itemCount: filteredCards.length,
+                                    separatorBuilder: (_, __) => const Gap(12),
+                                    itemBuilder: (context, index) {
+                                      final card = filteredCards[index];
+                                      return GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            selectedCard = card;
+                                            isEditing = true;
+                                            bankNameController.text =
+                                                card.bankName;
+                                            amountController.text = card.balance
+                                                .toString();
+                                            limitController.text = card
+                                                .creditLimit
+                                                .toString();
+                                            usedController.text = card
+                                                .usedAmount
+                                                .toString();
+                                            isPrimary = card.isPrimary;
+                                          });
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.05,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            border: Border.all(
+                                              color: Colors.white10,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.all(
+                                                  10,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.primaryNeon
+                                                      .withValues(alpha: 0.1),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(
+                                                  card.isCredit
+                                                      ? Icons.credit_card
+                                                      : Icons
+                                                            .account_balance_wallet,
+                                                  color: AppColors.primaryNeon,
+                                                  size: 20,
+                                                ),
+                                              ),
+                                              const Gap(16),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      card.bankName,
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      'Balance: ₹${card.displayBalance}',
+                                                      style: TextStyle(
+                                                        color: Colors.white
+                                                            .withValues(
+                                                              alpha: 0.5,
+                                                            ),
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const Icon(
+                                                Icons.chevron_right,
+                                                color: Colors.white24,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                          )
+                        else ...[
+                          CardPreviewWidget(
+                            bankName: bankNameController.text,
+                            balance: selectedCard!.isCredit
+                                ? limitController.text
+                                : amountController.text,
+                            isCredit: selectedCard!.isCredit,
                           ),
+                          const Gap(24),
+                          if (!selectedCard!.isCash)
+                            _buildField(
+                              controller: bankNameController,
+                              hint: 'Bank Name',
+                              icon: Icons.account_balance_rounded,
+                              onChanged: (val) => setState(() {}),
+                            ),
                           const Gap(16),
-                          _buildField(
-                            controller: usedController,
-                            hint: 'Spent Amount',
-                            icon: Icons.shopping_bag_outlined,
-                            keyboardType: TextInputType.number,
-                            onChanged: (val) => setState(() {}),
-                          ),
-                        ] else ...[
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildField(
-                                  controller: amountController,
-                                  hint: 'Balance',
-                                  icon: Icons.currency_rupee_rounded,
-                                  keyboardType: TextInputType.number,
-                                  onChanged: (val) => setState(() {}),
+                          if (selectedCard!.isCredit) ...[
+                            _buildField(
+                              controller: limitController,
+                              hint: 'Limit',
+                              icon: Icons.speed_rounded,
+                              keyboardType: TextInputType.number,
+                              onChanged: (val) => setState(() {}),
+                            ),
+                            const Gap(16),
+                            _buildField(
+                              controller: usedController,
+                              hint: 'Spent Amount',
+                              icon: Icons.shopping_bag_outlined,
+                              keyboardType: TextInputType.number,
+                              onChanged: (val) => setState(() {}),
+                            ),
+                          ] else ...[
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildField(
+                                    controller: amountController,
+                                    hint: 'Balance',
+                                    icon: Icons.currency_rupee_rounded,
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (val) => setState(() {}),
+                                  ),
                                 ),
-                              ),
-                              if (selectedCard!.isDebit) ...[
-                                const Gap(16),
-                                Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    CupertinoCheckbox(
-                                      value: isPrimary,
-                                      onChanged: (val) =>
-                                          setState(() => isPrimary = val!),
-                                      activeColor: AppColors.primaryNeon,
-                                    ),
-                                    Text(
-                                      'Primary',
-                                      style: GoogleFonts.montserrat(
-                                        fontSize: 10,
-                                        color: Colors.white70,
+                                if (selectedCard!.isDebit) ...[
+                                  const Gap(16),
+                                  Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      CupertinoCheckbox(
+                                        value: isPrimary,
+                                        onChanged: (val) =>
+                                            setState(() => isPrimary = val!),
+                                        activeColor: AppColors.primaryNeon,
                                       ),
-                                    ),
-                                  ],
-                                ),
+                                      Text(
+                                        'Primary',
+                                        style: GoogleFonts.montserrat(
+                                          fontSize: 10,
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ],
-                            ],
-                          ),
+                            ),
+                          ],
                         ],
                         const Gap(32),
                         Row(
@@ -554,7 +564,7 @@ class AppBottomSheet {
                           ),
                         ),
                       ],
-                    ],
+                    ),
                   ),
                 );
               },

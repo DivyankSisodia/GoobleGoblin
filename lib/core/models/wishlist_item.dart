@@ -49,20 +49,6 @@ class WishlistItem {
     'isDeleted': isDeleted ? 1 : 0,
   };
 
-  /// Convert to Supabase-compatible map
-  Map<String, dynamic> toSupabaseMap() => {
-    'uuid': uuid,
-    'url': url,
-    'title': title,
-    'image_url': imageUrl,
-    'price': price,
-    'notes': notes,
-    'date_added': dateAdded,
-    'is_purchased': isPurchased,
-    'updated_at': updatedAt,
-    'is_deleted': isDeleted,
-  };
-
   factory WishlistItem.fromMap(Map<String, dynamic> map) => WishlistItem(
     id: map['id'],
     url: map['url'],
@@ -78,23 +64,6 @@ class WishlistItem {
     lastSyncedAt: map['lastSyncedAt'],
     isDeleted: (map['isDeleted'] ?? 0) == 1,
   );
-
-  /// Create from Supabase row
-  factory WishlistItem.fromSupabaseMap(Map<String, dynamic> map) =>
-      WishlistItem(
-        url: map['url'] ?? '',
-        title: map['title'],
-        imageUrl: map['image_url'],
-        price: (map['price'] as num?)?.toDouble(),
-        notes: map['notes'],
-        dateAdded: map['date_added'] ?? '',
-        isPurchased: map['is_purchased'] == true,
-        updatedAt: map['updated_at'],
-        uuid: map['uuid'],
-        syncStatus: SyncStatus.synced,
-        lastSyncedAt: DateTime.now().toIso8601String(),
-        isDeleted: map['is_deleted'] == true,
-      );
 
   WishlistItem copyWith({
     int? id,

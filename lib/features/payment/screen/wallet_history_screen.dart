@@ -5,6 +5,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/models/card.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/payment.dart';
 import '../../../core/theme/app_theme.dart';
@@ -31,15 +32,41 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final paymentsState = ref.watch(paymentsProvider);
-    final paymentsByDate = paymentsState.paymentsByDate;
-    final sortedDates = paymentsByDate.keys.toList();
+    final cardsState = ref.watch(cardsProvider);
 
-    // Sort dates descending
-    sortedDates.sort((a, b) {
-      final dateA = AppDateUtils.parseIso(a) ?? DateTime.now();
-      final dateB = AppDateUtils.parseIso(b) ?? DateTime.now();
-      return dateB.compareTo(dateA);
-    });
+    // Compute the correct payment list for the current tab
+    final Map<String, List<Payment>> paymentsByDate;
+    switch (_selectedTabIndex) {
+      case 2: // Recurring – only recurring transactions, search still applies
+        final recurringAll = paymentsState.payments.where((p) => p.isRecurring);
+        final recurringFiltered = paymentsState.searchQuery.isEmpty
+            ? recurringAll
+            : recurringAll.where((p) {
+                final query = paymentsState.searchQuery.toLowerCase();
+                final note = p.note?.toLowerCase() ?? '';
+                final cat = p.category?.label.toLowerCase() ?? '';
+                return note.contains(query) || cat.contains(query);
+              });
+        paymentsByDate = _groupByDate(recurringFiltered.toList());
+        break;
+      case 3: // Recent – last 7 days from filtered set
+        final cutoff = DateTime.now().subtract(const Duration(days: 7));
+        final recent = paymentsState.filteredPayments.where((p) {
+          final date = AppDateUtils.parseIso(p.date);
+          return date != null && date.isAfter(cutoff);
+        });
+        paymentsByDate = _groupByDate(recent.toList());
+        break;
+      default: // All
+        paymentsByDate = paymentsState.paymentsByDate;
+    }
+
+    final sortedDates = paymentsByDate.keys.toList()
+      ..sort((a, b) {
+        final dateA = AppDateUtils.parseIso(a) ?? DateTime.now();
+        final dateB = AppDateUtils.parseIso(b) ?? DateTime.now();
+        return dateB.compareTo(dateA);
+      });
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -58,7 +85,7 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
                         color: AppColors.primaryNeon,
                       ),
                     )
-                  : paymentsState.payments.isEmpty
+                  : sortedDates.isEmpty
                   ? _buildEmptyState()
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(
@@ -69,7 +96,11 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
                       itemBuilder: (context, index) {
                         final dateKey = sortedDates[index];
                         final paymentsForDate = paymentsByDate[dateKey]!;
-                        return _buildDateGroup(dateKey, paymentsForDate);
+                        return _buildDateGroup(
+                          dateKey,
+                          paymentsForDate,
+                          cardsState.cards,
+                        );
                       },
                     ),
             ),
@@ -93,6 +124,19 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
             )
           : null,
     );
+  }
+
+  /// Groups a flat list of payments by ISO date key (yyyy-MM-dd).
+  Map<String, List<Payment>> _groupByDate(List<Payment> payments) {
+    final grouped = <String, List<Payment>>{};
+    for (final payment in payments) {
+      final date = AppDateUtils.parseIso(payment.date);
+      if (date != null) {
+        final key = AppDateUtils.formatIso(date);
+        grouped.putIfAbsent(key, () => []).add(payment);
+      }
+    }
+    return grouped;
   }
 
   Widget _buildAppBar() {
@@ -332,7 +376,11 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
     );
   }
 
-  Widget _buildDateGroup(String dateKey, List<Payment> payments) {
+  Widget _buildDateGroup(
+    String dateKey,
+    List<Payment> payments,
+    List<BankCard> cards,
+  ) {
     final date = AppDateUtils.parseIso(dateKey) ?? DateTime.now();
     final dateLabel = AppDateUtils.isToday(date)
         ? 'Today'
@@ -370,15 +418,27 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
             ],
           ),
         ),
-        ...payments.map((p) => _buildTransactionTile(p)),
+        ...payments.map((p) {
+          final card = cards.where((c) => c.id == p.cardId).firstOrNull;
+          return _buildTransactionTile(p, card);
+        }),
         const Gap(8),
       ],
     );
   }
 
-  Widget _buildTransactionTile(Payment payment) {
+  Widget _buildTransactionTile(Payment payment, BankCard? card) {
     final cat = payment.category;
     final categoryColor = PredefinedCategories.getColor(cat?.icon);
+
+    // Build the payment source label and icon
+    final (sourceIcon, sourceLabel, sourceColor) = card == null
+        ? (Icons.credit_card_outlined, 'Unknown', Colors.white38)
+        : card.isCash
+        ? (Icons.money_rounded, 'Cash', const Color(0xFF4CAF50))
+        : card.isCredit
+        ? (Icons.credit_card_rounded, card.bankName, const Color(0xFF9C27B0))
+        : (Icons.account_balance_rounded, card.bankName, AppColors.primaryNeon);
 
     return Slidable(
       key: ValueKey(payment.id),
@@ -452,6 +512,7 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  const Gap(2),
                   Text(
                     cat?.label ?? 'Other',
                     style: GoogleFonts.montserrat(
@@ -459,6 +520,27 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                     ),
+                  ),
+                  const Gap(4),
+                  // Payment source chip
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(sourceIcon, size: 10, color: sourceColor),
+                      const Gap(4),
+                      Flexible(
+                        child: Text(
+                          sourceLabel,
+                          style: GoogleFonts.montserrat(
+                            color: sourceColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

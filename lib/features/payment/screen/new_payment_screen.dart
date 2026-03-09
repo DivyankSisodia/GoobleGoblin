@@ -172,6 +172,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
         // Update local state since we used repository directly
         ref.read(paymentsProvider.notifier).loadPayments();
         ref.read(cardsProvider.notifier).loadCards();
+        ref.read(analyticsProvider.notifier).refresh();
       }
 
       if (success && mounted) {

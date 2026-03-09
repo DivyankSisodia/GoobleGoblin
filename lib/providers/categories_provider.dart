@@ -1,11 +1,8 @@
-import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/category.dart';
-import '../../core/services/sync_engine.dart';
 import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/category_repository_impl.dart';
-import 'sync_provider.dart';
 
 /// Provider for CategoryRepository
 final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
@@ -60,22 +57,10 @@ class CategoriesState {
 /// Categories notifier using modern Riverpod patterns
 class CategoriesNotifier extends StateNotifier<CategoriesState> {
   final CategoryRepository _repository;
-  final Ref _ref;
-  StreamSubscription<SyncResult>? _syncDataSub;
 
-  CategoriesNotifier(this._repository, this._ref)
+  CategoriesNotifier(this._repository, Ref ref)
     : super(const CategoriesState()) {
     _initialize();
-    // Reload whenever the sync engine pulls or pushes data
-    _syncDataSub = SyncEngine.instance.onDataChanged.listen(
-      (_) => loadCategories(),
-    );
-  }
-
-  @override
-  void dispose() {
-    _syncDataSub?.cancel();
-    super.dispose();
   }
 
   /// Initialize - load categories and seed defaults if needed
@@ -117,7 +102,6 @@ class CategoriesNotifier extends StateNotifier<CategoriesState> {
       },
       (id) {
         loadCategories();
-        _ref.read(syncProvider.notifier).syncAfterChange();
         return true;
       },
     );
@@ -136,7 +120,6 @@ class CategoriesNotifier extends StateNotifier<CategoriesState> {
       },
       (success) {
         loadCategories();
-        _ref.read(syncProvider.notifier).syncAfterChange();
         return success;
       },
     );
@@ -155,7 +138,6 @@ class CategoriesNotifier extends StateNotifier<CategoriesState> {
       },
       (success) {
         loadCategories();
-        _ref.read(syncProvider.notifier).syncAfterChange();
         return success;
       },
     );
@@ -165,8 +147,6 @@ class CategoriesNotifier extends StateNotifier<CategoriesState> {
   Future<void> seedDefaultCategories() async {
     await _repository.seedDefaultCategories();
     await loadCategories();
-    // Push freshly seeded categories to Supabase
-    _ref.read(syncProvider.notifier).syncAfterChange();
   }
 
   /// Clear error message

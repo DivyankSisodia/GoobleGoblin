@@ -1,11 +1,8 @@
-import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/card.dart';
-import '../../core/services/sync_engine.dart';
 import '../../data/repositories/card_repository.dart';
 import '../../data/repositories/card_repository_impl.dart';
-import 'sync_provider.dart';
 
 /// Provider for CardRepository
 final cardRepositoryProvider = Provider<CardRepository>((ref) {
@@ -75,19 +72,9 @@ class CardsState {
 /// Cards notifier using modern Riverpod patterns
 class CardsNotifier extends StateNotifier<CardsState> {
   final CardRepository _repository;
-  final Ref _ref;
-  StreamSubscription<SyncResult>? _syncDataSub;
 
-  CardsNotifier(this._repository, this._ref) : super(const CardsState()) {
+  CardsNotifier(this._repository, Ref ref) : super(const CardsState()) {
     loadCards();
-    // Reload whenever the sync engine pulls or pushes data
-    _syncDataSub = SyncEngine.instance.onDataChanged.listen((_) => loadCards());
-  }
-
-  @override
-  void dispose() {
-    _syncDataSub?.cancel();
-    super.dispose();
   }
 
   /// Load all cards from repository
@@ -119,8 +106,6 @@ class CardsNotifier extends StateNotifier<CardsState> {
       },
       (id) {
         loadCards();
-        // Trigger background sync
-        _ref.read(syncProvider.notifier).syncAfterChange();
         return true;
       },
     );
@@ -139,7 +124,6 @@ class CardsNotifier extends StateNotifier<CardsState> {
       },
       (success) {
         loadCards();
-        _ref.read(syncProvider.notifier).syncAfterChange();
         return success;
       },
     );
@@ -158,7 +142,6 @@ class CardsNotifier extends StateNotifier<CardsState> {
       },
       (success) {
         loadCards();
-        _ref.read(syncProvider.notifier).syncAfterChange();
         return success;
       },
     );
@@ -238,4 +221,49 @@ final cardsByTypeProvider = Provider.family<List<BankCard>, String>((
 ) {
   final state = ref.watch(cardsProvider);
   return state.cards.where((c) => c.type == type).toList();
+});
+
+/// Credit card summary data
+class CreditCardSummary {
+  final List<BankCard> creditCards;
+  final double totalCreditLimit;
+  final double totalUsedAmount;
+  final double totalAvailableCredit;
+  final double overallUsagePercentage;
+
+  const CreditCardSummary({
+    this.creditCards = const [],
+    this.totalCreditLimit = 0,
+    this.totalUsedAmount = 0,
+    this.totalAvailableCredit = 0,
+    this.overallUsagePercentage = 0,
+  });
+
+  bool get hasCreditCards => creditCards.isNotEmpty;
+}
+
+/// Provider for aggregated credit card summary
+final creditCardSummaryProvider = Provider<CreditCardSummary>((ref) {
+  final state = ref.watch(cardsProvider);
+  final creditCards = state.creditCards;
+
+  if (creditCards.isEmpty) {
+    return const CreditCardSummary();
+  }
+
+  final totalLimit = creditCards.fold(0.0, (sum, c) => sum + c.creditLimit);
+  final totalUsed = creditCards.fold(0.0, (sum, c) => sum + c.usedAmount);
+  final totalAvailable = creditCards.fold(
+    0.0,
+    (sum, c) => sum + c.availableCredit,
+  );
+  final usagePct = totalLimit > 0 ? (totalUsed / totalLimit) : 0.0;
+
+  return CreditCardSummary(
+    creditCards: creditCards,
+    totalCreditLimit: totalLimit,
+    totalUsedAmount: totalUsed,
+    totalAvailableCredit: totalAvailable,
+    overallUsagePercentage: usagePct.clamp(0.0, 1.0),
+  );
 });

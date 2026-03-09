@@ -1,7 +1,5 @@
-import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/services/sync_engine.dart';
 import '../../data/repositories/payment_repository.dart';
 import '../../data/repositories/payment_repository_impl.dart';
 import '../../core/utils/date_utils.dart';
@@ -124,20 +122,9 @@ class AnalyticsState {
 /// Analytics notifier
 class AnalyticsNotifier extends StateNotifier<AnalyticsState> {
   final PaymentRepository _repository;
-  StreamSubscription<SyncResult>? _syncDataSub;
 
   AnalyticsNotifier(this._repository) : super(const AnalyticsState()) {
     loadAnalytics();
-    // Reload whenever the sync engine pulls or pushes data
-    _syncDataSub = SyncEngine.instance.onDataChanged.listen(
-      (_) => loadAnalytics(),
-    );
-  }
-
-  @override
-  void dispose() {
-    _syncDataSub?.cancel();
-    super.dispose();
   }
 
   /// Load analytics for selected period

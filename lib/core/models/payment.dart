@@ -63,21 +63,6 @@ class Payment {
     'isDeleted': isDeleted ? 1 : 0,
   };
 
-  /// Convert to Supabase-compatible map (remote schema)
-  Map<String, dynamic> toSupabaseMap() => {
-    'uuid': uuid,
-    'amount': amount,
-    'date': date,
-    'card_uuid': cardUuid,
-    'category_uuid': categoryUuid,
-    'is_recurring': isRecurring,
-    'frequency': frequency,
-    'reminder_notification': reminderNotification,
-    'note': note,
-    'created_at': createdAt,
-    'is_deleted': isDeleted,
-  };
-
   factory Payment.fromMap(Map<String, dynamic> map) => Payment(
     id: map['id'],
     amount: map['amount'],
@@ -102,29 +87,6 @@ class Payment {
             icon: map['category_icon'],
           )
         : null,
-  );
-
-  /// Create from Supabase row
-  factory Payment.fromSupabaseMap(
-    Map<String, dynamic> map, {
-    required int localCardId,
-    required int localCategoryId,
-  }) => Payment(
-    amount: (map['amount'] as num).toDouble(),
-    date: map['date'],
-    cardId: localCardId,
-    categoryId: localCategoryId,
-    isRecurring: map['is_recurring'] == true,
-    frequency: map['frequency'],
-    reminderNotification: map['reminder_notification'] == true,
-    note: map['note'],
-    createdAt: map['created_at'],
-    uuid: map['uuid'],
-    cardUuid: map['card_uuid'],
-    categoryUuid: map['category_uuid'],
-    syncStatus: SyncStatus.synced,
-    lastSyncedAt: DateTime.now().toIso8601String(),
-    isDeleted: map['is_deleted'] == true,
   );
 
   @override

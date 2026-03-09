@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../providers/providers.dart';
 import '../../../utils/add_card_bottomsheet.dart';
+import '../widget/credit_card_summary_dialog.dart';
 import '../widget/custom_tab_widget.dart';
 import '../widget/monthly_budget_widget.dart';
 import '../widget/total_balance_widget.dart';
@@ -67,6 +68,25 @@ class HomeScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          Container(
+            height: 42,
+            width: 42,
+            decoration: const BoxDecoration(
+              color: AppColors.primaryNeon,
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              onPressed: () {
+                showCreditCardSummaryDialog(context);
+              },
+              icon: const Icon(
+                CupertinoIcons.creditcard,
+                color: Colors.black,
+                size: 22,
+              ),
+            ),
+          ),
+          const Gap(8),
           Container(
             height: 42,
             width: 42,

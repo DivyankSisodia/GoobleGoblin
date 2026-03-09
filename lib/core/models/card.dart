@@ -175,22 +175,6 @@ class BankCard {
     'isDeleted': isDeleted ? 1 : 0,
   };
 
-  /// Convert to Supabase-compatible map (remote schema)
-  Map<String, dynamic> toSupabaseMap() => {
-    'uuid': uuid,
-    'bank_name': bankName,
-    'balance': balance,
-    'date': date,
-    'type': type,
-    'is_primary': isPrimary,
-    'created_at': createdAt,
-    'updated_at': updatedAt,
-    'account_type': accountType.dbValue,
-    'credit_limit': creditLimit,
-    'used_amount': usedAmount,
-    'is_deleted': isDeleted,
-  };
-
   factory BankCard.fromMap(Map<String, dynamic> map) => BankCard(
     id: map['id'],
     bankName: map['bankName'] ?? '',
@@ -207,24 +191,6 @@ class BankCard {
     syncStatus: SyncStatus.fromString(map['syncStatus']),
     lastSyncedAt: map['lastSyncedAt'],
     isDeleted: (map['isDeleted'] ?? 0) == 1,
-  );
-
-  /// Create from Supabase row (remote schema uses snake_case)
-  factory BankCard.fromSupabaseMap(Map<String, dynamic> map) => BankCard(
-    bankName: map['bank_name'] ?? '',
-    balance: (map['balance'] ?? 0).toDouble(),
-    date: map['date'] ?? '',
-    type: map['type'] ?? 'Debit',
-    isPrimary: map['is_primary'] == true,
-    createdAt: map['created_at'],
-    updatedAt: map['updated_at'],
-    accountType: AccountType.fromString(map['account_type']),
-    creditLimit: (map['credit_limit'] ?? 0).toDouble(),
-    usedAmount: (map['used_amount'] ?? 0).toDouble(),
-    uuid: map['uuid'],
-    syncStatus: SyncStatus.synced,
-    lastSyncedAt: DateTime.now().toIso8601String(),
-    isDeleted: map['is_deleted'] == true,
   );
 
   BankCard copyWith({
