@@ -487,6 +487,7 @@ class DatabaseHelper {
   // ============================================================
 
   /// Seed predefined categories (called once during onboarding)
+  /// Categories are seeded with UUIDs and marked as PENDING_CREATE for sync
   Future<void> seedPredefinedCategories() async {
     final db = await database;
 
@@ -494,13 +495,15 @@ class DatabaseHelper {
     final seeded = await getSetting(AppSettingsKeys.categoriesSeeded);
     if (seeded == 'true') return;
 
-    // Insert predefined categories
+    // Insert predefined categories with UUIDs and sync status
     for (final category in PredefinedCategories.all) {
       await db.insert('categories', {
         'label': category.label,
         'icon': category.icon,
         'assetPath': category.assetPath,
         'isPredefined': 1,
+        'uuid': generateUuid(),
+        'syncStatus': 'PENDING_CREATE',
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
 
@@ -645,11 +648,10 @@ class DatabaseHelper {
     // Mark both old and new primary cards as dirty for sync
     for (final row in oldPrimary) {
       final oldId = row['id'] as int;
-      if (oldId != cardId) {
+      if (oldId != cardId) {}
+      await markPendingUpdate('cards', cardId);
+      await markPendingUpdate('cards', oldId);
     }
-    await markPendingUpdate('cards', cardId);
-        await markPendingUpdate('cards', oldId);
-      }
   }
 
   /// Update card balance (for Cash/Debit)

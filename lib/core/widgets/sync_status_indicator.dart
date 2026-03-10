@@ -45,7 +45,7 @@ class SyncStatusIndicator extends ConsumerWidget {
   }
 
   Widget _buildIcon(SyncState state) {
-    if (state.isSyncing) {
+    if (state.isBackingUp) {
       return SizedBox(
         width: 12,
         height: 12,
@@ -68,23 +68,23 @@ class SyncStatusIndicator extends ConsumerWidget {
   Color _backgroundColor(SyncState state) {
     if (!state.isOnline) return Colors.orange;
     if (state.hasError) return Colors.red;
-    if (state.isSyncing) return Colors.blue;
+    if (state.isBackingUp) return Colors.blue;
     return Colors.green;
   }
 
   String _statusText(SyncState state) {
     if (!state.isOnline) return 'Offline';
-    if (state.isSyncing) return 'Syncing...';
-    if (state.hasError) return 'Sync Error';
-    return 'Synced';
+    if (state.isBackingUp) return 'Backing up...';
+    if (state.hasError) return 'Backup Error';
+    return 'Backed up';
   }
 
   void _onTap(BuildContext context, WidgetRef ref, SyncState state) {
-    if (state.isOnline && !state.isSyncing) {
-      ref.read(syncProvider.notifier).syncNow();
+    if (state.isOnline && !state.isBackingUp) {
+      ref.read(syncProvider.notifier).backupNow();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Syncing...'),
+          content: Text('Backing up...'),
           duration: Duration(seconds: 1),
           behavior: SnackBarBehavior.floating,
         ),

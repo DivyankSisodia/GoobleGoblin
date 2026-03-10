@@ -2,95 +2,125 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/services/connectivity_service.dart';
-import '../core/services/sync_engine.dart';
+import '../core/services/cloud_backup_service.dart';
 
-/// State for the sync provider
-class SyncState {
-  final SyncEngineStatus status;
+/// State for the backup provider
+class BackupState {
+  final BackupStatus status;
   final bool isOnline;
-  final SyncResult? lastResult;
-  final String? lastSyncTime;
+  final BackupResult? lastResult;
+  final String? lastBackupTime;
 
-  const SyncState({
-    this.status = SyncEngineStatus.idle,
+  const BackupState({
+    this.status = BackupStatus.idle,
     this.isOnline = false,
     this.lastResult,
-    this.lastSyncTime,
+    this.lastBackupTime,
   });
 
-  SyncState copyWith({
-    SyncEngineStatus? status,
+  BackupState copyWith({
+    BackupStatus? status,
     bool? isOnline,
-    SyncResult? lastResult,
-    String? lastSyncTime,
+    BackupResult? lastResult,
+    String? lastBackupTime,
   }) {
-    return SyncState(
+    return BackupState(
       status: status ?? this.status,
       isOnline: isOnline ?? this.isOnline,
       lastResult: lastResult ?? this.lastResult,
-      lastSyncTime: lastSyncTime ?? this.lastSyncTime,
+      lastBackupTime: lastBackupTime ?? this.lastBackupTime,
     );
   }
 
-  bool get isSyncing => status == SyncEngineStatus.syncing;
-  bool get hasError => status == SyncEngineStatus.error;
+  bool get isBackingUp => status == BackupStatus.backing_up;
+  bool get hasError => status == BackupStatus.error;
 }
 
-/// Notifier that manages sync state and bridges connectivity + sync engine
-class SyncNotifier extends StateNotifier<SyncState> {
-  final SyncEngine _syncEngine;
+/// Notifier that manages backup state and bridges connectivity + backup service
+class BackupNotifier extends StateNotifier<BackupState> {
+  final CloudBackupService _backupService;
   final ConnectivityService _connectivity;
-  StreamSubscription<SyncEngineStatus>? _syncSub;
+  StreamSubscription<BackupStatus>? _backupSub;
   StreamSubscription<bool>? _connectSub;
+  StreamSubscription<BackupResult>? _resultSub;
 
-  SyncNotifier(this._syncEngine, this._connectivity)
-    : super(SyncState(isOnline: _connectivity.isOnline)) {
+  BackupNotifier(this._backupService, this._connectivity)
+    : super(BackupState(isOnline: _connectivity.isOnline)) {
     _listen();
   }
 
   void _listen() {
-    _syncSub = _syncEngine.onStatusChange.listen((status) {
+    _backupSub = _backupService.onStatusChange.listen((status) {
       state = state.copyWith(status: status);
     });
 
     _connectSub = _connectivity.onStatusChange.listen((online) {
       state = state.copyWith(isOnline: online);
     });
+
+    _resultSub = _backupService.onBackupCompleted.listen((result) {
+      state = state.copyWith(
+        lastResult: result,
+        lastBackupTime: DateTime.now().toIso8601String(),
+      );
+    });
   }
 
-  /// Trigger a manual sync
-  Future<void> syncNow() async {
-    final result = await _syncEngine.syncAll();
+  /// Trigger a manual backup
+  Future<BackupResult> backupNow() async {
+    final result = await _backupService.triggerBackup();
     state = state.copyWith(
       lastResult: result,
-      lastSyncTime: DateTime.now().toIso8601String(),
+      lastBackupTime: DateTime.now().toIso8601String(),
     );
+    return result;
   }
 
-  /// Trigger sync after a local data change
-  Future<void> syncAfterChange() async {
-    await _syncEngine.triggerSync();
+  /// Get path to latest backup for sharing
+  Future<String?> getLatestBackupPath() async {
+    return await _backupService.getLatestBackupPath();
+  }
+
+  /// Restore from a backup file
+  Future<BackupResult> restoreFromBackup(String filePath) async {
+    return await _backupService.restoreFromBackup(filePath);
+  }
+
+  /// Get list of available backups
+  Future<List<dynamic>> getAvailableBackups() async {
+    return await _backupService.getAvailableBackups();
   }
 
   @override
   void dispose() {
-    _syncSub?.cancel();
+    _backupSub?.cancel();
     _connectSub?.cancel();
+    _resultSub?.cancel();
     super.dispose();
   }
 }
 
-/// Main sync provider
-final syncProvider = StateNotifierProvider<SyncNotifier, SyncState>((ref) {
-  return SyncNotifier(SyncEngine.instance, ConnectivityService.instance);
+/// Main backup provider
+final backupProvider = StateNotifierProvider<BackupNotifier, BackupState>((
+  ref,
+) {
+  return BackupNotifier(
+    CloudBackupService.instance,
+    ConnectivityService.instance,
+  );
 });
 
 /// Provider for online/offline status
 final isOnlineProvider = Provider<bool>((ref) {
-  return ref.watch(syncProvider).isOnline;
+  return ref.watch(backupProvider).isOnline;
 });
 
-/// Provider for sync status
-final syncStatusProvider = Provider<SyncEngineStatus>((ref) {
-  return ref.watch(syncProvider).status;
+/// Provider for backup status
+final backupStatusProvider = Provider<BackupStatus>((ref) {
+  return ref.watch(backupProvider).status;
 });
+
+// Legacy aliases for backward compatibility
+typedef SyncState = BackupState;
+typedef SyncNotifier = BackupNotifier;
+final syncProvider = backupProvider;

@@ -4,10 +4,11 @@ import 'package:toastification/toastification.dart';
 
 import 'core/DB/db_helper.dart';
 import 'core/services/connectivity_service.dart';
-import 'core/services/supabase_config.dart';
-import 'core/services/sync_engine.dart';
+import 'core/services/cloud_backup_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/notification_service.dart';
+import 'features/auth/providers/auth_provider.dart';
+import 'features/auth/auth_gaurd.dart';
 import 'features/main_screen.dart';
 import 'features/onboarding/providers/onboarding_provider.dart';
 import 'features/onboarding/screens/onboarding_screen.dart';
@@ -24,13 +25,8 @@ void main() async {
   // Initialize connectivity monitoring
   await ConnectivityService.instance.initialize();
 
-  // Initialize Supabase (non-blocking - app works offline if this fails)
-  if (SupabaseConfig.isConfigured) {
-    await SupabaseConfig.initialize();
-  }
-
-  // Initialize sync engine (handles background sync)
-  SyncEngine.instance.initialize();
+  // Initialize cloud backup service (runs in background)
+  CloudBackupService.instance.initialize();
 
   runApp(const ProviderScope(child: GoobleGoblinApp()));
 }
@@ -52,19 +48,31 @@ class GoobleGoblinApp extends ConsumerWidget {
   }
 }
 
-/// App router that checks onboarding status
+/// App router that checks onboarding and auth status
 class _AppRouter extends ConsumerWidget {
   const _AppRouter();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final onboardingNeeded = ref.watch(isOnboardingNeededProvider);
+    final authState = ref.watch(authProvider);
 
     return onboardingNeeded.when(
       data: (needsOnboarding) {
+        // First check onboarding
         if (needsOnboarding) {
           return const OnboardingScreen();
         }
+
+        // Then check authentication
+        if (authState.isLoading) {
+          return const _SplashLoader();
+        }
+
+        if (authState.shouldShowAuth) {
+          return AuthScreen();
+        }
+
         return const MainScreen();
       },
       loading: () => const _SplashLoader(),

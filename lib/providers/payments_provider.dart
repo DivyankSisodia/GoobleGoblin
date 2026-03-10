@@ -2,13 +2,12 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/payment.dart';
-import '../../core/services/sync_engine.dart';
+import '../../core/services/cloud_backup_service.dart';
 import '../../core/utils/date_utils.dart';
 import '../../data/repositories/payment_repository.dart';
 import '../../data/repositories/payment_repository_impl.dart';
 import 'analytics_provider.dart';
 import 'cards_provider.dart';
-import 'sync_provider.dart';
 
 /// Provider for PaymentRepository
 final paymentRepositoryProvider = Provider<PaymentRepository>((ref) {
@@ -134,12 +133,12 @@ class DateRange {
 class PaymentsNotifier extends StateNotifier<PaymentsState> {
   final PaymentRepository _repository;
   final Ref _ref;
-  StreamSubscription<SyncResult>? _syncDataSub;
+  StreamSubscription<BackupResult>? _backupDataSub;
 
   PaymentsNotifier(this._repository, this._ref) : super(const PaymentsState()) {
     loadPayments();
-    // Reload whenever the sync engine pulls or pushes data
-    _syncDataSub = SyncEngine.instance.onDataChanged.listen((_) {
+    // Reload whenever backup service completes (for restore operations)
+    _backupDataSub = CloudBackupService.instance.onBackupCompleted.listen((_) {
       loadPayments();
       // Also refresh analytics since payment data changed
       try {
@@ -150,7 +149,7 @@ class PaymentsNotifier extends StateNotifier<PaymentsState> {
 
   @override
   void dispose() {
-    _syncDataSub?.cancel();
+    _backupDataSub?.cancel();
     super.dispose();
   }
 
@@ -185,8 +184,6 @@ class PaymentsNotifier extends StateNotifier<PaymentsState> {
         loadPayments();
         // Refresh cards to update balances
         _ref.read(cardsProvider.notifier).loadCards();
-        // Trigger background sync
-        _ref.read(syncProvider.notifier).syncAfterChange();
         return true;
       },
     );
@@ -206,7 +203,6 @@ class PaymentsNotifier extends StateNotifier<PaymentsState> {
       (success) {
         loadPayments();
         _ref.read(cardsProvider.notifier).loadCards();
-        _ref.read(syncProvider.notifier).syncAfterChange();
         return success;
       },
     );
@@ -226,7 +222,6 @@ class PaymentsNotifier extends StateNotifier<PaymentsState> {
       (success) {
         loadPayments();
         _ref.read(cardsProvider.notifier).loadCards();
-        _ref.read(syncProvider.notifier).syncAfterChange();
         return success;
       },
     );

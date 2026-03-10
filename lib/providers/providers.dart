@@ -1,5 +1,5 @@
 /// Providers exports
-library providers;
+library;
 
 export 'analytics_provider.dart';
 export 'cards_provider.dart';

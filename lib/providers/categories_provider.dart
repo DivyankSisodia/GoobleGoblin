@@ -2,10 +2,9 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/category.dart';
-import '../../core/services/sync_engine.dart';
+import '../../core/services/cloud_backup_service.dart';
 import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/category_repository_impl.dart';
-import 'sync_provider.dart';
 
 /// Provider for CategoryRepository
 final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
@@ -60,21 +59,19 @@ class CategoriesState {
 /// Categories notifier using modern Riverpod patterns
 class CategoriesNotifier extends StateNotifier<CategoriesState> {
   final CategoryRepository _repository;
-  final Ref _ref;
-  StreamSubscription<SyncResult>? _syncDataSub;
+  StreamSubscription<BackupResult>? _backupDataSub;
 
-  CategoriesNotifier(this._repository, this._ref)
-    : super(const CategoriesState()) {
+  CategoriesNotifier(this._repository) : super(const CategoriesState()) {
     _initialize();
-    // Reload whenever the sync engine pulls or pushes data
-    _syncDataSub = SyncEngine.instance.onDataChanged.listen(
+    // Reload whenever backup service completes (for restore operations)
+    _backupDataSub = CloudBackupService.instance.onBackupCompleted.listen(
       (_) => loadCategories(),
     );
   }
 
   @override
   void dispose() {
-    _syncDataSub?.cancel();
+    _backupDataSub?.cancel();
     super.dispose();
   }
 
@@ -117,7 +114,6 @@ class CategoriesNotifier extends StateNotifier<CategoriesState> {
       },
       (id) {
         loadCategories();
-        _ref.read(syncProvider.notifier).syncAfterChange();
         return true;
       },
     );
@@ -136,7 +132,6 @@ class CategoriesNotifier extends StateNotifier<CategoriesState> {
       },
       (success) {
         loadCategories();
-        _ref.read(syncProvider.notifier).syncAfterChange();
         return success;
       },
     );
@@ -155,7 +150,6 @@ class CategoriesNotifier extends StateNotifier<CategoriesState> {
       },
       (success) {
         loadCategories();
-        _ref.read(syncProvider.notifier).syncAfterChange();
         return success;
       },
     );
@@ -165,8 +159,7 @@ class CategoriesNotifier extends StateNotifier<CategoriesState> {
   Future<void> seedDefaultCategories() async {
     await _repository.seedDefaultCategories();
     await loadCategories();
-    // Push freshly seeded categories to Supabase
-    _ref.read(syncProvider.notifier).syncAfterChange();
+    // Background backup will handle this automatically
   }
 
   /// Clear error message
@@ -179,7 +172,7 @@ class CategoriesNotifier extends StateNotifier<CategoriesState> {
 final categoriesProvider =
     StateNotifierProvider<CategoriesNotifier, CategoriesState>((ref) {
       final repository = ref.watch(categoryRepositoryProvider);
-      return CategoriesNotifier(repository, ref);
+      return CategoriesNotifier(repository);
     });
 
 /// Provider for category list only
