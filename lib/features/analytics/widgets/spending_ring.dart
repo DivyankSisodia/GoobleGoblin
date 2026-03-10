@@ -10,11 +10,15 @@ import '../../../data/repositories/payment_repository.dart';
 class SpendingRingWidget extends StatefulWidget {
   final List<CategorySpendingData> categoryData;
   final double totalSpending;
+  final String title;
+  final String subtitle;
 
   const SpendingRingWidget({
     super.key,
     required this.categoryData,
     required this.totalSpending,
+    this.title = 'Spending by Category',
+    this.subtitle = 'Tap on a segment to see details',
   });
 
   @override
@@ -64,7 +68,7 @@ class _SpendingRingWidgetState extends State<SpendingRingWidget>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Spending by Category',
+            widget.title,
             style: GoogleFonts.montserrat(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -73,7 +77,7 @@ class _SpendingRingWidgetState extends State<SpendingRingWidget>
           ),
           const SizedBox(height: 8),
           Text(
-            'Tap on a segment to see details',
+            widget.subtitle,
             style: GoogleFonts.montserrat(
               fontSize: 12,
               color: AppColors.textSecondary,

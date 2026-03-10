@@ -17,7 +17,7 @@ class DatabaseHelper {
   DatabaseHelper._init();
 
   /// Current database version
-  static const int _dbVersion = 5;
+  static const int _dbVersion = 6;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -80,6 +80,18 @@ class DatabaseHelper {
     if (oldVersion < 5) {
       await _migrateToVersion5(db);
     }
+    if (oldVersion < 6) {
+      await _migrateToVersion6(db);
+    }
+  }
+
+  /// Version 6 migration: Add isExternalTransaction to payments
+  Future<void> _migrateToVersion6(Database db) async {
+    try {
+      await db.execute(
+        'ALTER TABLE payments ADD COLUMN isExternalTransaction INTEGER DEFAULT 0',
+      );
+    } catch (_) {}
   }
 
   Future<void> _migrateToVersion4(Database db) async {
@@ -394,6 +406,7 @@ class DatabaseHelper {
       syncStatus TEXT DEFAULT 'PENDING_CREATE',
       lastSyncedAt TEXT,
       isDeleted INTEGER DEFAULT 0,
+      isExternalTransaction INTEGER DEFAULT 0,
       FOREIGN KEY (cardId) REFERENCES cards (id) ON DELETE CASCADE,
       FOREIGN KEY (categoryId) REFERENCES categories (id) ON DELETE SET NULL
     )''');
@@ -766,37 +779,40 @@ class DatabaseHelper {
       final id = await txn.insert('payments', map);
 
       // 2. Get the card to determine how to update balance
-      final cardResult = await txn.query(
-        'cards',
-        where: 'id = ?',
-        whereArgs: [payment.cardId],
-      );
-      if (cardResult.isNotEmpty) {
-        final card = BankCard.fromMap(cardResult.first);
-        final now = DateTime.now().toIso8601String();
+      // Skip balance deduction for external transactions
+      if (!payment.isExternalTransaction) {
+        final cardResult = await txn.query(
+          'cards',
+          where: 'id = ?',
+          whereArgs: [payment.cardId],
+        );
+        if (cardResult.isNotEmpty) {
+          final card = BankCard.fromMap(cardResult.first);
+          final now = DateTime.now().toIso8601String();
 
-        if (card.accountType == AccountType.credit) {
-          // For credit cards: increase used amount
+          if (card.accountType == AccountType.credit) {
+            // For credit cards: increase used amount
+            await txn.execute(
+              '''
+              UPDATE cards SET usedAmount = usedAmount + ?, updatedAt = ? WHERE id = ?
+            ''',
+              [payment.amount, now, payment.cardId],
+            );
+          } else {
+            // For cash/debit: decrease balance
+            await txn.execute(
+              '''
+              UPDATE cards SET balance = balance - ?, updatedAt = ? WHERE id = ?
+            ''',
+              [payment.amount, now, payment.cardId],
+            );
+          }
+
           await txn.execute(
-            '''
-            UPDATE cards SET usedAmount = usedAmount + ?, updatedAt = ? WHERE id = ?
-          ''',
-            [payment.amount, now, payment.cardId],
-          );
-        } else {
-          // For cash/debit: decrease balance
-          await txn.execute(
-            '''
-            UPDATE cards SET balance = balance - ?, updatedAt = ? WHERE id = ?
-          ''',
-            [payment.amount, now, payment.cardId],
+            "UPDATE cards SET syncStatus = 'PENDING_UPDATE' WHERE id = ? AND syncStatus = 'SYNCED'",
+            [payment.cardId],
           );
         }
-
-        await txn.execute(
-          "UPDATE cards SET syncStatus = 'PENDING_UPDATE' WHERE id = ? AND syncStatus = 'SYNCED'",
-          [payment.cardId],
-        );
       }
 
       // 3. Update expenditure aggregates
@@ -871,7 +887,10 @@ class DatabaseHelper {
         final oldPayment = Payment.fromMap(oldResult.first);
         final amountDiff = payment.amount - oldPayment.amount;
 
-        if (amountDiff != 0) {
+        // Adjust balance only when neither old nor new payment is external
+        if (amountDiff != 0 &&
+            !payment.isExternalTransaction &&
+            !oldPayment.isExternalTransaction) {
           final cardResult = await txn.query(
             'cards',
             where: 'id = ?',
@@ -902,6 +921,61 @@ class DatabaseHelper {
               [payment.cardId],
             );
           }
+        } else if (amountDiff != 0 &&
+            !payment.isExternalTransaction &&
+            oldPayment.isExternalTransaction) {
+          // Was external, now not — deduct the full new amount
+          final cardResult = await txn.query(
+            'cards',
+            where: 'id = ?',
+            whereArgs: [payment.cardId],
+          );
+          if (cardResult.isNotEmpty) {
+            final card = BankCard.fromMap(cardResult.first);
+            final now = DateTime.now().toIso8601String();
+            if (card.accountType == AccountType.credit) {
+              await txn.execute(
+                'UPDATE cards SET usedAmount = usedAmount + ?, updatedAt = ? WHERE id = ?',
+                [payment.amount, now, payment.cardId],
+              );
+            } else {
+              await txn.execute(
+                'UPDATE cards SET balance = balance - ?, updatedAt = ? WHERE id = ?',
+                [payment.amount, now, payment.cardId],
+              );
+            }
+            await txn.execute(
+              "UPDATE cards SET syncStatus = 'PENDING_UPDATE' WHERE id = ? AND syncStatus = 'SYNCED'",
+              [payment.cardId],
+            );
+          }
+        } else if (payment.isExternalTransaction &&
+            !oldPayment.isExternalTransaction) {
+          // Was normal, now external — restore the old amount
+          final cardResult = await txn.query(
+            'cards',
+            where: 'id = ?',
+            whereArgs: [payment.cardId],
+          );
+          if (cardResult.isNotEmpty) {
+            final card = BankCard.fromMap(cardResult.first);
+            final now = DateTime.now().toIso8601String();
+            if (card.accountType == AccountType.credit) {
+              await txn.execute(
+                'UPDATE cards SET usedAmount = usedAmount - ?, updatedAt = ? WHERE id = ?',
+                [oldPayment.amount, now, payment.cardId],
+              );
+            } else {
+              await txn.execute(
+                'UPDATE cards SET balance = balance + ?, updatedAt = ? WHERE id = ?',
+                [oldPayment.amount, now, payment.cardId],
+              );
+            }
+            await txn.execute(
+              "UPDATE cards SET syncStatus = 'PENDING_UPDATE' WHERE id = ? AND syncStatus = 'SYNCED'",
+              [payment.cardId],
+            );
+          }
         }
       }
 
@@ -927,30 +1001,34 @@ class DatabaseHelper {
       );
       if (result.isNotEmpty) {
         final payment = Payment.fromMap(result.first);
-        final cardResult = await txn.query(
-          'cards',
-          where: 'id = ?',
-          whereArgs: [payment.cardId],
-        );
 
-        if (cardResult.isNotEmpty) {
-          final card = BankCard.fromMap(cardResult.first);
-          final now = DateTime.now().toIso8601String();
+        // Only restore balance for non-external transactions
+        if (!payment.isExternalTransaction) {
+          final cardResult = await txn.query(
+            'cards',
+            where: 'id = ?',
+            whereArgs: [payment.cardId],
+          );
 
-          if (card.accountType == AccountType.credit) {
-            await txn.execute(
-              '''
+          if (cardResult.isNotEmpty) {
+            final card = BankCard.fromMap(cardResult.first);
+            final now = DateTime.now().toIso8601String();
+
+            if (card.accountType == AccountType.credit) {
+              await txn.execute(
+                '''
               UPDATE cards SET usedAmount = usedAmount - ?, updatedAt = ? WHERE id = ?
             ''',
-              [payment.amount, now, payment.cardId],
-            );
-          } else {
-            await txn.execute(
-              '''
+                [payment.amount, now, payment.cardId],
+              );
+            } else {
+              await txn.execute(
+                '''
               UPDATE cards SET balance = balance + ?, updatedAt = ? WHERE id = ?
             ''',
-              [payment.amount, now, payment.cardId],
-            );
+                [payment.amount, now, payment.cardId],
+              );
+            }
           }
         }
 

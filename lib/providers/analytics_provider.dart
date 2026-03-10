@@ -33,15 +33,32 @@ extension AnalyticsPeriodX on AnalyticsPeriod {
     final now = DateTime.now();
     switch (this) {
       case AnalyticsPeriod.week:
-        return (now.subtract(const Duration(days: 7)), now);
+        // Include 7 days ahead so future-dated transactions this week appear
+        return (
+          now.subtract(const Duration(days: 7)),
+          now.add(const Duration(days: 7)),
+        );
       case AnalyticsPeriod.month:
-        return (DateTime(now.year, now.month, 1), now);
+        // End of the current month
+        return (
+          DateTime(now.year, now.month, 1),
+          DateTime(now.year, now.month + 1, 0, 23, 59, 59),
+        );
       case AnalyticsPeriod.quarter:
-        return (DateTime(now.year, now.month - 2, 1), now);
+        // End of 3 months from start of the quarter window
+        return (
+          DateTime(now.year, now.month - 2, 1),
+          DateTime(now.year, now.month + 1, 0, 23, 59, 59),
+        );
       case AnalyticsPeriod.year:
-        return (DateTime(now.year, 1, 1), now);
+        // End of the current year
+        return (
+          DateTime(now.year, 1, 1),
+          DateTime(now.year, 12, 31, 23, 59, 59),
+        );
       case AnalyticsPeriod.all:
-        return (DateTime(2020, 1, 1), now);
+        // Far future so no future transaction is ever excluded
+        return (DateTime(2020, 1, 1), DateTime(2100, 12, 31));
     }
   }
 }
@@ -55,6 +72,15 @@ class AnalyticsState {
   final bool isLoading;
   final String? errorMessage;
 
+  /// Category breakdown derived from recurring payments (per-occurrence amounts)
+  final List<CategorySpendingData> recurringCategoryData;
+
+  /// Total of future-dated one-time scheduled payments
+  final double scheduledFutureTotal;
+
+  /// Number of upcoming recurring payment occurrences within the next 30 days
+  final int upcomingRecurringCount;
+
   const AnalyticsState({
     this.analytics,
     this.categoryData = const [],
@@ -62,6 +88,9 @@ class AnalyticsState {
     this.selectedPeriod = AnalyticsPeriod.month,
     this.isLoading = false,
     this.errorMessage,
+    this.recurringCategoryData = const [],
+    this.scheduledFutureTotal = 0,
+    this.upcomingRecurringCount = 0,
   });
 
   AnalyticsState copyWith({
@@ -71,6 +100,9 @@ class AnalyticsState {
     AnalyticsPeriod? selectedPeriod,
     bool? isLoading,
     String? errorMessage,
+    List<CategorySpendingData>? recurringCategoryData,
+    double? scheduledFutureTotal,
+    int? upcomingRecurringCount,
   }) {
     return AnalyticsState(
       analytics: analytics ?? this.analytics,
@@ -79,6 +111,11 @@ class AnalyticsState {
       selectedPeriod: selectedPeriod ?? this.selectedPeriod,
       isLoading: isLoading ?? this.isLoading,
       errorMessage: errorMessage,
+      recurringCategoryData:
+          recurringCategoryData ?? this.recurringCategoryData,
+      scheduledFutureTotal: scheduledFutureTotal ?? this.scheduledFutureTotal,
+      upcomingRecurringCount:
+          upcomingRecurringCount ?? this.upcomingRecurringCount,
     );
   }
 
@@ -149,6 +186,12 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsState> {
     final days = endDate.difference(startDate).inDays + 1;
     final dailyResult = await _repository.getDailySpending(days);
 
+    // Load recurring payments for separate pie breakdown
+    final recurringResult = await _repository.getRecurringPayments();
+
+    // Load all payments to compute future-dated scheduled total
+    final allPaymentsResult = await _repository.getAllPayments();
+
     // Combine results
     List<CategorySpendingData> categoryList = [];
     if (categoryResult.isSuccess) {
@@ -160,10 +203,78 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsState> {
       dailyList = dailyResult.successValue;
     }
 
+    // Build recurring category breakdown
+    final recurringCategoryList = <CategorySpendingData>[];
+    int upcomingRecurringCount = 0;
+    if (recurringResult.isSuccess) {
+      final recurring = recurringResult.successValue;
+      final grouped = <int, Map<String, dynamic>>{};
+      double recurringTotal = 0;
+      final now = DateTime.now();
+      final cutoff = now.add(const Duration(days: 30));
+
+      for (final p in recurring) {
+        final catId = p.categoryId;
+        final catName = p.category?.label ?? 'Uncategorized';
+        final catIcon = p.category?.icon ?? 'category';
+        grouped[catId] ??= {
+          'name': catName,
+          'icon': catIcon,
+          'amount': 0.0,
+          'count': 0,
+        };
+        grouped[catId]!['amount'] =
+            (grouped[catId]!['amount'] as double) + p.amount;
+        grouped[catId]!['count'] = (grouped[catId]!['count'] as int) + 1;
+        recurringTotal += p.amount;
+
+        // Count occurrences due in the next 30 days
+        final lastDate = AppDateUtils.parseIso(p.date);
+        if (lastDate != null && p.frequency != null) {
+          final next = AppDateUtils.getNextOccurrence(lastDate, p.frequency!);
+          if (next.isAfter(now) && next.isBefore(cutoff)) {
+            upcomingRecurringCount++;
+          }
+        }
+      }
+
+      for (final entry in grouped.entries) {
+        final amt = entry.value['amount'] as double;
+        recurringCategoryList.add(
+          CategorySpendingData(
+            categoryId: entry.key,
+            categoryName: entry.value['name'] as String,
+            categoryIcon: entry.value['icon'] as String,
+            amount: amt,
+            transactionCount: entry.value['count'] as int,
+            percentage: recurringTotal > 0 ? (amt / recurringTotal) * 100 : 0,
+          ),
+        );
+      }
+      recurringCategoryList.sort((a, b) => b.amount.compareTo(a.amount));
+    }
+
+    // Compute future-dated scheduled one-time payments total
+    double scheduledFutureTotal = 0;
+    if (allPaymentsResult.isSuccess) {
+      final now = DateTime.now();
+      scheduledFutureTotal = allPaymentsResult.successValue
+          .where(
+            (p) =>
+                !p.isRecurring &&
+                !p.isDeleted &&
+                (AppDateUtils.parseIso(p.date)?.isAfter(now) ?? false),
+          )
+          .fold(0.0, (sum, p) => sum + p.amount);
+    }
+
     state = state.copyWith(
       analytics: analyticsResult.getOrNull(),
       categoryData: categoryList,
       dailyData: dailyList,
+      recurringCategoryData: recurringCategoryList,
+      scheduledFutureTotal: scheduledFutureTotal,
+      upcomingRecurringCount: upcomingRecurringCount,
       isLoading: false,
       errorMessage: analyticsResult.isFailure
           ? analyticsResult.failureValue.message
@@ -208,7 +319,7 @@ final spendingTrendProvider = Provider<double>((ref) {
   return state.spendingTrend;
 });
 
-/// Provider for heatmap data (last 30 days)
+/// Provider for heatmap data (last 30 days) — kept for legacy consumers
 final spendingHeatmapProvider = Provider<Map<DateTime, double>>((ref) {
   final state = ref.watch(analyticsProvider);
   final heatmap = <DateTime, double>{};
@@ -220,4 +331,20 @@ final spendingHeatmapProvider = Provider<Map<DateTime, double>>((ref) {
   }
 
   return heatmap;
+});
+
+/// Always loads the last 17 weeks of daily spending amounts for the GitHub-style heatmap.
+/// Independent of the selected analytics period filter.
+final heatmapDailyAmountProvider = FutureProvider<Map<String, double>>((
+  ref,
+) async {
+  final repo = ref.read(analyticsRepositoryProvider);
+  const totalDays = 17 * 7; // 119 days
+  final result = await repo.getDailySpending(totalDays);
+  if (result.isFailure) return {};
+  return {
+    for (final d in result.successValue)
+      '${d.date.year}-${d.date.month.toString().padLeft(2, '0')}-${d.date.day.toString().padLeft(2, '0')}':
+          d.amount,
+  };
 });

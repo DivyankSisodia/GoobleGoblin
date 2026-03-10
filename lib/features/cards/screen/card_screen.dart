@@ -204,7 +204,10 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
                 },
                 borderRadius: BorderRadius.circular(24),
                 child: Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.successGreen.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(24),
@@ -264,7 +267,10 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
               },
               borderRadius: BorderRadius.circular(24),
               child: Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceLight.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(24),

@@ -15,6 +15,9 @@ class Payment {
   final String? updatedAt;
   final Category? category;
 
+  // Controls whether this transaction deducts from card balance
+  final bool isExternalTransaction;
+
   // Sync fields
   final String? uuid;
   final String? cardUuid;
@@ -39,6 +42,7 @@ class Payment {
     this.uuid,
     this.cardUuid,
     this.categoryUuid,
+    this.isExternalTransaction = false,
     this.syncStatus = SyncStatus.pendingCreate,
     this.lastSyncedAt,
     this.isDeleted = false,
@@ -58,6 +62,7 @@ class Payment {
     'uuid': uuid,
     'cardUuid': cardUuid,
     'categoryUuid': categoryUuid,
+    'isExternalTransaction': isExternalTransaction ? 1 : 0,
     'syncStatus': syncStatus.dbValue,
     'lastSyncedAt': lastSyncedAt,
     'isDeleted': isDeleted ? 1 : 0,
@@ -79,6 +84,7 @@ class Payment {
     categoryUuid: map['categoryUuid'],
     syncStatus: SyncStatus.fromString(map['syncStatus']),
     lastSyncedAt: map['lastSyncedAt'],
+    isExternalTransaction: (map['isExternalTransaction'] ?? 0) == 1,
     isDeleted: (map['isDeleted'] ?? 0) == 1,
     category: map['category_label'] != null
         ? Category(

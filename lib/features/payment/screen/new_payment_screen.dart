@@ -43,6 +43,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
   bool _isRecurring = false;
   String _selectedFrequency = 'Monthly';
   bool _isReminderEnabled = true; // Default to true for scheduled payments
+  bool _isExternalTransaction = false;
 
   @override
   void initState() {
@@ -58,6 +59,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
       _isRecurring = p.isRecurring;
       _selectedFrequency = p.frequency ?? 'Monthly';
       _isReminderEnabled = p.reminderNotification;
+      _isExternalTransaction = p.isExternalTransaction;
     } else if (widget.fromWishlist != null) {
       final item = widget.fromWishlist!;
       if (item.price != null) {
@@ -135,6 +137,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
         frequency: _isRecurring ? _selectedFrequency : null,
         reminderNotification: _isReminderEnabled,
         note: _descriptionController.text.trim(),
+        isExternalTransaction: _isExternalTransaction,
         createdAt:
             widget.paymentToEdit?.createdAt ?? DateTime.now().toIso8601String(),
       );
@@ -371,6 +374,9 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
             const Gap(32),
             _buildRecurringSection(),
 
+            const Gap(16),
+            _buildExternalTransactionToggle(),
+
             const Gap(40),
             _buildSaveButton(),
             const Gap(60),
@@ -459,6 +465,56 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
               ),
               const Gap(12),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExternalTransactionToggle() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceLight.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+            color: _isExternalTransaction
+                ? AppColors.primaryNeon.withValues(alpha: 0.4)
+                : Colors.white.withValues(alpha: 0.05),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'External Transaction',
+                    style: GoogleFonts.montserrat(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Gap(4),
+                  Text(
+                    'Record this transaction without\ndeducting from your card balance',
+                    style: GoogleFonts.montserrat(
+                      color: Colors.white54,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            CupertinoSwitch(
+              value: _isExternalTransaction,
+              activeColor: AppColors.primaryNeon,
+              onChanged: (val) => setState(() => _isExternalTransaction = val),
+            ),
           ],
         ),
       ),

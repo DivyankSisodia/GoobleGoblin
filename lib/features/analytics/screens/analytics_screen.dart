@@ -118,6 +118,25 @@ class AnalyticsScreen extends ConsumerWidget {
 
               const SliverToBoxAdapter(child: Gap(24)),
 
+              // Recurring Payments Ring (only shown when recurring data exists)
+              if (analyticsState.recurringCategoryData.isNotEmpty) ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: SpendingRingWidget(
+                      categoryData: analyticsState.recurringCategoryData,
+                      totalSpending: analyticsState.recurringCategoryData.fold(
+                        0.0,
+                        (s, d) => s + d.amount,
+                      ),
+                      title: 'Recurring Payments',
+                      subtitle: 'Category breakdown of your recurring charges',
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(child: Gap(24)),
+              ],
+
               // Spending Heatmap
               SliverToBoxAdapter(
                 child: Padding(
@@ -385,6 +404,43 @@ class AnalyticsScreen extends ConsumerWidget {
               ),
             ],
           ),
+          if (state.scheduledFutureTotal > 0 ||
+              state.upcomingRecurringCount > 0) ...[
+            const Gap(16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.accentCyan.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.accentCyan.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.upcoming_rounded,
+                    color: AppColors.accentCyan,
+                    size: 16,
+                  ),
+                  const Gap(8),
+                  Expanded(
+                    child: Text(
+                      state.scheduledFutureTotal > 0
+                          ? 'Upcoming: ${CurrencyUtils.formatCompact(state.scheduledFutureTotal)} scheduled'
+                                '${state.upcomingRecurringCount > 0 ? '  ·  ${state.upcomingRecurringCount} recurring due' : ''}'
+                          : '${state.upcomingRecurringCount} recurring payment${state.upcomingRecurringCount == 1 ? '' : 's'} due soon',
+                      style: GoogleFonts.montserrat(
+                        fontSize: 12,
+                        color: AppColors.accentCyan,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -491,6 +547,26 @@ class AnalyticsScreen extends ConsumerWidget {
               '${AppDateUtils.getDaysRemainingInMonth()} days left in this month',
           color: AppColors.accentTeal,
         ),
+        if (state.scheduledFutureTotal > 0) ...[
+          const Gap(12),
+          _buildInsightRow(
+            icon: Icons.schedule_rounded,
+            title: 'Scheduled Payments',
+            description:
+                '${CurrencyUtils.formatCompact(state.scheduledFutureTotal)} in upcoming one-time payments',
+            color: AppColors.accentCyan,
+          ),
+        ],
+        if (state.upcomingRecurringCount > 0) ...[
+          const Gap(12),
+          _buildInsightRow(
+            icon: Icons.autorenew_rounded,
+            title: 'Recurring Due Soon',
+            description:
+                '${state.upcomingRecurringCount} recurring payment${state.upcomingRecurringCount == 1 ? '' : 's'} due in the next 30 days',
+            color: AppColors.accentMagenta,
+          ),
+        ],
       ],
     );
   }
