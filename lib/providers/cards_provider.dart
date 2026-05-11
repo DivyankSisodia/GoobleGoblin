@@ -67,6 +67,15 @@ class CardsState {
   /// Get total credit balance
   double get creditBalance =>
       creditCards.fold(0.0, (sum, card) => sum + card.balance);
+
+  /// Get total cash balance
+  double get cashBalance => cards
+      .where((c) => c.isCash)
+      .fold<double>(0.0, (sum, c) => sum + c.balance);
+
+  /// Get total credit card used amount (spent on credit)
+  double get creditUsedAmount =>
+      creditCards.fold<double>(0.0, (sum, c) => sum + c.usedAmount);
 }
 
 /// Cards notifier using modern Riverpod patterns

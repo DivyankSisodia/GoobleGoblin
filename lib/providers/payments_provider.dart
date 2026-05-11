@@ -123,12 +123,12 @@ class PaymentsState {
   /// Get total spending
   double get totalSpending => payments.fold(0.0, (sum, p) => sum + p.amount);
 
-  /// Get current month spending
+  /// Get current month spending (based on billing cycle starting 7th)
   double get currentMonthSpending {
     return payments
         .where((p) {
           final date = AppDateUtils.parseIso(p.date);
-          return date != null && AppDateUtils.isCurrentMonth(date);
+          return date != null && AppDateUtils.isCurrentBillingCycle(date);
         })
         .fold(0.0, (sum, p) => sum + p.amount);
   }

@@ -39,10 +39,16 @@ extension AnalyticsPeriodX on AnalyticsPeriod {
           now.add(const Duration(days: 7)),
         );
       case AnalyticsPeriod.month:
-        // End of the current month
+        // Billing cycle: 7th of current month → 6th of next month
+        if (now.day >= 7) {
+          return (
+            DateTime(now.year, now.month, 7),
+            DateTime(now.year, now.month + 1, 6, 23, 59, 59),
+          );
+        }
         return (
-          DateTime(now.year, now.month, 1),
-          DateTime(now.year, now.month + 1, 0, 23, 59, 59),
+          DateTime(now.year, now.month - 1, 7),
+          DateTime(now.year, now.month, 6, 23, 59, 59),
         );
       case AnalyticsPeriod.quarter:
         // End of 3 months from start of the quarter window

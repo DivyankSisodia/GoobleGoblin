@@ -17,7 +17,7 @@ class DatabaseHelper {
   DatabaseHelper._init();
 
   /// Current database version
-  static const int _dbVersion = 6;
+  static const int _dbVersion = 7;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -40,6 +40,7 @@ class DatabaseHelper {
     // Repair any records that are missing UUIDs (e.g. categories seeded
     // before the UUID fix). This is idempotent and fast when no rows match.
     await _repairMissingUuids(db);
+    await _repairCategoryAssetPathsToPng(db);
 
     // Initialize sqflite_live for debugging (only in debug mode)
     assert(() {
@@ -72,6 +73,22 @@ class DatabaseHelper {
     }
   }
 
+  Future<void> _repairCategoryAssetPathsToPng(Database db) async {
+    try {
+      await db.execute('''
+        UPDATE categories
+        SET assetPath = REPLACE(assetPath, '.svg', '.png')
+        WHERE assetPath LIKE 'assets/images/%.svg'
+      ''');
+
+      await db.execute('''
+        UPDATE categories
+        SET assetPath = 'assets/images/grocery.png'
+        WHERE assetPath = 'assets/images/groceries.png'
+      ''');
+    } catch (_) {}
+  }
+
   /// Version 4 migration: Add account types, credit limits, app settings
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 4) {
@@ -83,6 +100,9 @@ class DatabaseHelper {
     if (oldVersion < 6) {
       await _migrateToVersion6(db);
     }
+    if (oldVersion < 7) {
+      await _migrateToVersion7(db);
+    }
   }
 
   /// Version 6 migration: Add isExternalTransaction to payments
@@ -91,6 +111,30 @@ class DatabaseHelper {
       await db.execute(
         'ALTER TABLE payments ADD COLUMN isExternalTransaction INTEGER DEFAULT 0',
       );
+    } catch (_) {}
+  }
+
+  /// Version 7 migration: Add Grocery category for existing users
+  Future<void> _migrateToVersion7(Database db) async {
+    try {
+      // Check if Grocery category already exists
+      final existing = await db.query(
+        'categories',
+        where: 'LOWER(label) = ?',
+        whereArgs: ['grocery'],
+      );
+
+      if (existing.isEmpty) {
+        await db.insert('categories', {
+          'label': 'Grocery',
+          'icon': 'grocery',
+          'assetPath': 'assets/images/grocery.png',
+          'isPredefined': 1,
+          'uuid': const Uuid().v4(),
+          'syncStatus': 'PENDING_CREATE',
+          'isDeleted': 0,
+        });
+      }
     } catch (_) {}
   }
 
@@ -154,8 +198,8 @@ class DatabaseHelper {
 
     // 5. Migrate existing cards to set accountType based on type field
     await db.execute('''
-      UPDATE cards SET accountType = 
-        CASE 
+      UPDATE cards SET accountType =
+        CASE
           WHEN LOWER(type) = 'credit' THEN 'CREDIT'
           WHEN LOWER(type) = 'cash' THEN 'CASH'
           ELSE 'DEBIT'
@@ -722,16 +766,16 @@ class DatabaseHelper {
 
     // Sum of Cash + Debit balances
     final debitResult = await db.rawQuery('''
-      SELECT COALESCE(SUM(balance), 0) as total 
-      FROM cards 
+      SELECT COALESCE(SUM(balance), 0) as total
+      FROM cards
       WHERE accountType IN ('CASH', 'DEBIT')
     ''');
     final debitTotal = (debitResult.first['total'] as num?)?.toDouble() ?? 0;
 
     // Available credit from credit cards
     final creditResult = await db.rawQuery('''
-      SELECT COALESCE(SUM(creditLimit - usedAmount), 0) as total 
-      FROM cards 
+      SELECT COALESCE(SUM(creditLimit - usedAmount), 0) as total
+      FROM cards
       WHERE accountType = 'CREDIT'
     ''');
     final creditAvailable =
@@ -1102,11 +1146,13 @@ class DatabaseHelper {
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  /// Get monthly spending for current month
+  /// Get spending for the current billing cycle (starting from the 7th)
   Future<double> getCurrentMonthSpending() async {
     final db = await database;
     final now = DateTime.now();
-    final startOfMonth = DateTime(now.year, now.month, 1);
+    final startOfCycle = now.day >= 7
+        ? DateTime(now.year, now.month, 7)
+        : DateTime(now.year, now.month - 1, 7);
 
     final result = await db.rawQuery(
       '''
@@ -1114,7 +1160,7 @@ class DatabaseHelper {
       FROM payments
       WHERE date >= ?
     ''',
-      [startOfMonth.toIso8601String()],
+      [startOfCycle.toIso8601String()],
     );
 
     return (result.first['total'] as num?)?.toDouble() ?? 0;
@@ -1128,7 +1174,7 @@ class DatabaseHelper {
     final db = await database;
     return await db.rawQuery(
       '''
-      SELECT 
+      SELECT
         c.id, c.label, c.icon, c.assetPath,
         COALESCE(SUM(p.amount), 0) as total,
         COUNT(p.id) as count
@@ -1221,38 +1267,44 @@ class DatabaseHelper {
   // ANALYTICS & INSIGHTS
   // ============================================================
 
-  /// Get spending trend (this month vs last month)
+  /// Get spending trend (current billing cycle vs previous billing cycle)
   Future<Map<String, double>> getSpendingTrend() async {
     final db = await database;
     final now = DateTime.now();
 
-    // This month
-    final thisMonthStart = DateTime(now.year, now.month, 1);
-    final thisMonthResult = await db.rawQuery(
+    // Current billing cycle (7th to 6th)
+    final thisCycleStart = now.day >= 7
+        ? DateTime(now.year, now.month, 7)
+        : DateTime(now.year, now.month - 1, 7);
+    final thisCycleResult = await db.rawQuery(
       '''
       SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE date >= ?
     ''',
-      [thisMonthStart.toIso8601String()],
+      [thisCycleStart.toIso8601String()],
     );
-    final thisMonth = (thisMonthResult.first['total'] as num?)?.toDouble() ?? 0;
+    final thisCycle = (thisCycleResult.first['total'] as num?)?.toDouble() ?? 0;
 
-    // Last month
-    final lastMonthStart = DateTime(now.year, now.month - 1, 1);
-    final lastMonthEnd = DateTime(now.year, now.month, 0);
-    final lastMonthResult = await db.rawQuery(
+    // Previous billing cycle
+    final prevCycleEnd = thisCycleStart.subtract(const Duration(days: 1));
+    final prevCycleStart = DateTime(
+      prevCycleEnd.year,
+      prevCycleEnd.month - (prevCycleEnd.day < 7 ? 1 : 0),
+      7,
+    );
+    final prevCycleResult = await db.rawQuery(
       '''
       SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE date BETWEEN ? AND ?
     ''',
-      [lastMonthStart.toIso8601String(), lastMonthEnd.toIso8601String()],
+      [prevCycleStart.toIso8601String(), prevCycleEnd.toIso8601String()],
     );
-    final lastMonth = (lastMonthResult.first['total'] as num?)?.toDouble() ?? 0;
+    final lastCycle = (prevCycleResult.first['total'] as num?)?.toDouble() ?? 0;
 
     return {
-      'thisMonth': thisMonth,
-      'lastMonth': lastMonth,
-      'difference': thisMonth - lastMonth,
-      'percentChange': lastMonth > 0
-          ? ((thisMonth - lastMonth) / lastMonth * 100)
+      'thisMonth': thisCycle,
+      'lastMonth': lastCycle,
+      'difference': thisCycle - lastCycle,
+      'percentChange': lastCycle > 0
+          ? ((thisCycle - lastCycle) / lastCycle * 100)
           : 0,
     };
   }
@@ -1261,14 +1313,16 @@ class DatabaseHelper {
   Future<Map<String, dynamic>> getMonthEndStats() async {
     final db = await database;
     final now = DateTime.now();
-    final startOfMonth = DateTime(now.year, now.month, 1);
+    final startOfCycle = now.day >= 7
+        ? DateTime(now.year, now.month, 7)
+        : DateTime(now.year, now.month - 1, 7);
 
     // Total spending
     final totalResult = await db.rawQuery(
       '''
       SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count FROM payments WHERE date >= ?
     ''',
-      [startOfMonth.toIso8601String()],
+      [startOfCycle.toIso8601String()],
     );
 
     // Top category
@@ -1282,7 +1336,7 @@ class DatabaseHelper {
       ORDER BY count DESC
       LIMIT 1
     ''',
-      [startOfMonth.toIso8601String()],
+      [startOfCycle.toIso8601String()],
     );
 
     // Biggest single expense
@@ -1295,7 +1349,7 @@ class DatabaseHelper {
       ORDER BY p.amount DESC
       LIMIT 1
     ''',
-      [startOfMonth.toIso8601String()],
+      [startOfCycle.toIso8601String()],
     );
 
     // Days with spending
@@ -1303,7 +1357,7 @@ class DatabaseHelper {
       '''
       SELECT COUNT(DISTINCT date(date)) as days FROM payments WHERE date >= ?
     ''',
-      [startOfMonth.toIso8601String()],
+      [startOfCycle.toIso8601String()],
     );
 
     return {

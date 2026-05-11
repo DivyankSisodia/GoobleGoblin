@@ -1,4 +1,5 @@
 import '../../core/DB/db_helper.dart';
+import '../../core/app_images.dart';
 import '../../core/errors/failures.dart';
 import '../../core/models/category.dart';
 import '../../core/utils/result.dart';
@@ -113,7 +114,7 @@ class CategoryRepositoryImpl implements CategoryRepository {
       Category(label: 'Travel', icon: 'flight'),
       Category(label: 'Education', icon: 'school'),
       Category(label: 'Subscriptions', icon: 'subscriptions'),
-      Category(label: 'Groceries', icon: 'local_grocery_store'),
+      Category(label: 'Grocery', icon: 'grocery', assetPath: AppImages.grocery),
       Category(label: 'Personal Care', icon: 'spa'),
       Category(label: 'Others', icon: 'category'),
     ];

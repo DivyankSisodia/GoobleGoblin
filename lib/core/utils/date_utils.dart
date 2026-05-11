@@ -15,6 +15,9 @@ class AppDateUtils {
   static const String dayFormat = 'EEE';
   static const String dayOfMonthFormat = 'dd';
 
+  /// Day of the month on which the billing cycle starts (e.g. 7th).
+  static const int billingStartDay = 7;
+
   /// Get current date as ISO string
   static String get nowIso => DateTime.now().toIso8601String();
 
@@ -27,13 +30,49 @@ class AppDateUtils {
   /// Get start of current month
   static DateTime get startOfMonth {
     final now = DateTime.now();
-    return DateTime(now.year, now.month, 1);
+    if (now.day >= billingStartDay) {
+      return DateTime(now.year, now.month, billingStartDay);
+    }
+    return DateTime(now.year, now.month - 1, billingStartDay);
   }
 
-  /// Get end of current month
   static DateTime get endOfMonth {
     final now = DateTime.now();
-    return DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+    if (now.day >= billingStartDay) {
+      return DateTime(now.year, now.month + 1, billingStartDay - 1, 23, 59, 59);
+    }
+    return DateTime(now.year, now.month, billingStartDay - 1, 23, 59, 59);
+  }
+
+  /// Start of the current billing cycle (7th of current month or previous month).
+  static DateTime get startOfBillingCycle {
+    final now = DateTime.now();
+    if (now.day >= billingStartDay) {
+      return DateTime(now.year, now.month, billingStartDay);
+    }
+    // Before the 7th → billing cycle started on the 7th of the previous month
+    return DateTime(now.year, now.month - 1, billingStartDay);
+  }
+
+  /// End of the current billing cycle (6th of next month).
+  static DateTime get endOfBillingCycle {
+    final now = DateTime.now();
+    if (now.day >= billingStartDay) {
+      return DateTime(now.year, now.month + 1, billingStartDay - 1, 23, 59, 59);
+    }
+    return DateTime(now.year, now.month, billingStartDay - 1, 23, 59, 59);
+  }
+
+  /// Start of the previous billing cycle.
+  static DateTime get startOfPreviousBillingCycle {
+    final start = startOfBillingCycle;
+    return DateTime(start.year, start.month - 1, billingStartDay);
+  }
+
+  /// End of the previous billing cycle (the day before the current cycle starts).
+  static DateTime get endOfPreviousBillingCycle {
+    final start = startOfBillingCycle;
+    return DateTime(start.year, start.month, start.day - 1, 23, 59, 59);
   }
 
   /// Get start of current week (Monday)
@@ -43,10 +82,16 @@ class AppDateUtils {
     return DateTime(now.year, now.month, now.day - (weekday - 1));
   }
 
-  /// Get year-month string for current date
+  /// Get year-month string for the current billing cycle.
+  /// If we're before the 7th, it belongs to the previous billing month.
   static String get currentYearMonth {
     final now = DateTime.now();
-    return '${now.year}-${now.month.toString().padLeft(2, '0')}';
+    final adjustedMonth = now.day >= billingStartDay
+        ? now.month
+        : now.month - 1;
+    final adjustedYear = adjustedMonth <= 0 ? now.year - 1 : now.year;
+    final month = adjustedMonth <= 0 ? adjustedMonth + 12 : adjustedMonth;
+    return '${adjustedYear}-${month.toString().padLeft(2, '0')}';
   }
 
   /// Format date to display string
@@ -116,10 +161,17 @@ class AppDateUtils {
         date.day == now.day;
   }
 
-  /// Check if date is in current month
+  /// Check if date is in current calendar month
   static bool isCurrentMonth(DateTime date) {
     final now = DateTime.now();
     return date.year == now.year && date.month == now.month;
+  }
+
+  /// Check if date falls within the current billing cycle (7th‑to‑6th).
+  static bool isCurrentBillingCycle(DateTime date) {
+    final start = startOfBillingCycle;
+    final end = endOfBillingCycle;
+    return !date.isBefore(start) && !date.isAfter(end);
   }
 
   /// Get list of dates in a date range

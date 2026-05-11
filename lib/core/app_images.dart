@@ -13,4 +13,5 @@ class AppImages {
   static const String debitCard = 'assets/images/debit_card.png';
   static const String creditCard = 'assets/images/credit_card.png';
   static const String rent = 'assets/images/rent.png';
+  static const String grocery = 'assets/images/grocery.png';
 }

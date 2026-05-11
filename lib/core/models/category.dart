@@ -142,6 +142,12 @@ class PredefinedCategories {
       assetPath: AppImages.bagShopping,
       color: Color(0xFF9B59B6),
     ),
+    Category(
+      label: 'Grocery',
+      icon: 'grocery',
+      assetPath: AppImages.grocery,
+      color: Color(0xFF27AE60),
+    ),
 
     // Transportation
     Category(
