@@ -44,6 +44,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
   String _selectedFrequency = 'Monthly';
   bool _isReminderEnabled = true; // Default to true for scheduled payments
   bool _isExternalTransaction = false;
+  bool _showDatePicker = false; // Controls visibility of date picker
 
   @override
   void initState() {
@@ -60,6 +61,8 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
       _selectedFrequency = p.frequency ?? 'Monthly';
       _isReminderEnabled = p.reminderNotification;
       _isExternalTransaction = p.isExternalTransaction;
+      // When editing, show date picker since a date was already chosen
+      _showDatePicker = true;
     } else if (widget.fromWishlist != null) {
       final item = widget.fromWishlist!;
       if (item.price != null) {
@@ -338,17 +341,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
             ),
 
             const Gap(32),
-            _buildSectionTitle('Date'),
-            const Gap(16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: DatePickerPill(
-                selectedDate: _selectedDate,
-                onDateChanged: (date) => setState(() => _selectedDate = date),
-              ),
-            ),
 
-            const Gap(32),
             _buildSectionTitle('Category'),
             const Gap(16),
             Padding(
@@ -369,6 +362,85 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
                     )
                     .toList(),
               ),
+            ),
+            const Gap(32),
+            _buildSectionTitle('Date'),
+            const Gap(16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _showDatePicker
+                  ? DatePickerPill(
+                      selectedDate: _selectedDate,
+                      onDateChanged: (date) =>
+                          setState(() => _selectedDate = date),
+                    )
+                  : GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _showDatePicker = true;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(28),
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF2A1038), Color(0xFF1A0E24)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.4),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Pick a date',
+                                  style: GoogleFonts.montserrat(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Recurring starts from today',
+                                  style: GoogleFonts.montserrat(
+                                    color: Colors.white.withOpacity(0.6),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Container(
+                              height: 36,
+                              width: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                CupertinoIcons.calendar,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
             ),
 
             const Gap(32),
