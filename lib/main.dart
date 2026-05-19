@@ -17,6 +17,7 @@ void main() async {
 
   // Initialize Database on startup
   await DatabaseHelper.instance.database;
+  await DatabaseHelper.instance.seedPredefinedCategories();
 
   runApp(const ProviderScope(child: GoobleGoblinApp()));
 }

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/category.dart';
+import '../../core/utils/result.dart';
 import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/category_repository_impl.dart';
 
@@ -95,16 +96,16 @@ class CategoriesNotifier extends StateNotifier<CategoriesState> {
 
     final result = await _repository.insertCategory(category);
 
-    return result.fold(
-      (failure) {
-        state = state.copyWith(isLoading: false, errorMessage: failure.message);
-        return false;
-      },
-      (id) {
-        loadCategories();
-        return true;
-      },
-    );
+    if (result.isLeft()) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: result.failureValue.message,
+      );
+      return false;
+    }
+
+    await loadCategories();
+    return true;
   }
 
   /// Update an existing category
@@ -113,16 +114,17 @@ class CategoriesNotifier extends StateNotifier<CategoriesState> {
 
     final result = await _repository.updateCategory(category);
 
-    return result.fold(
-      (failure) {
-        state = state.copyWith(isLoading: false, errorMessage: failure.message);
-        return false;
-      },
-      (success) {
-        loadCategories();
-        return success;
-      },
-    );
+    if (result.isLeft()) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: result.failureValue.message,
+      );
+      return false;
+    }
+
+    final success = result.getOrElse((_) => false);
+    await loadCategories();
+    return success;
   }
 
   /// Delete a category
@@ -131,16 +133,17 @@ class CategoriesNotifier extends StateNotifier<CategoriesState> {
 
     final result = await _repository.deleteCategory(id);
 
-    return result.fold(
-      (failure) {
-        state = state.copyWith(isLoading: false, errorMessage: failure.message);
-        return false;
-      },
-      (success) {
-        loadCategories();
-        return success;
-      },
-    );
+    if (result.isLeft()) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: result.failureValue.message,
+      );
+      return false;
+    }
+
+    final success = result.getOrElse((_) => false);
+    await loadCategories();
+    return success;
   }
 
   /// Seed default categories

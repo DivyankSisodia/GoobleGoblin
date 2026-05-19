@@ -4,22 +4,24 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../main_screen.dart';
 
-import '../../../core/theme/app_theme.dart';
+import '../../../core/errors/failures.dart';
+import '../../../core/models/category.dart';
 import '../../../core/models/payment.dart';
 import '../../../core/models/wishlist_item.dart';
-import '../../../core/utils/date_utils.dart';
-import '../../../providers/providers.dart';
-import '../widgets/amount_widget.dart';
-import '../widgets/custom_chip_widget.dart';
-import '../widgets/custom_date_widget.dart';
-import '../../cards/widget/card_preview_widget.dart';
-import '../widgets/frequency_dropdown.dart';
-import '../widgets/reoccuring_payment_widget.dart';
-import '../../../core/utils/notification_service.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_utils.dart';
-import '../../../core/errors/failures.dart';
+import '../../../core/utils/date_utils.dart';
+import '../../../core/utils/notification_service.dart';
+import '../../../providers/providers.dart';
+import '../../cards/widget/card_preview_widget.dart';
+import '../../main_screen.dart';
+import '../widgets/add_category_sheet.dart';
+import '../widgets/amount_widget.dart';
+import '../widgets/custom_date_widget.dart';
+import '../widgets/frequency_dropdown.dart';
+import '../widgets/payment_category_section.dart';
+import '../widgets/reoccuring_payment_widget.dart';
 
 class NewPaymentScreen extends ConsumerStatefulWidget {
   final Payment? paymentToEdit;
@@ -74,11 +76,13 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
       // Pre-select first category and primary card
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _preSelectDefaults();
+        _repairCategoriesIfNeeded();
       });
     } else {
       // Pre-select first category if available
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _preSelectDefaults();
+        _repairCategoriesIfNeeded();
       });
     }
   }
@@ -95,6 +99,48 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
           cards.where((c) => c.isPrimary).firstOrNull ?? cards.first;
       setState(() => _selectedCardId = primary.id);
     }
+  }
+
+  Future<void> _repairCategoriesIfNeeded() async {
+    final state = ref.read(categoriesProvider);
+    if (state.categories.isNotEmpty) return;
+    await ref.read(categoriesProvider.notifier).seedDefaultCategories();
+  }
+
+  Future<void> _showAddCategorySheet() async {
+    final existingCategories = ref.read(categoriesProvider).categories;
+    final category = await showModalBottomSheet<Category>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AddCategorySheet(existingCategories: existingCategories),
+    );
+
+    if (category == null) return;
+
+    final success = await ref.read(categoriesProvider.notifier).addCategory(
+      category,
+    );
+
+    if (!mounted) return;
+
+    if (!success) {
+      _showError(
+        ref.read(categoriesProvider).errorMessage ?? 'Failed to add category',
+      );
+      return;
+    }
+
+    final addedCategory = ref
+        .read(categoriesProvider)
+        .getCategoryByLabel(category.label);
+    if (addedCategory != null) {
+      setState(() => _selectedCategoryId = addedCategory.id);
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${category.label} added to categories')),
+    );
   }
 
   @override
@@ -247,7 +293,15 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
   @override
   Widget build(BuildContext context) {
     final cards = ref.watch(cardsProvider).cards;
-    final categories = ref.watch(categoriesProvider).categories;
+    final categoriesState = ref.watch(categoriesProvider);
+    final categories = categoriesState.categories;
+
+    if (categories.isNotEmpty && _selectedCategoryId == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _selectedCategoryId != null) return;
+        setState(() => _selectedCategoryId = categories.first.id);
+      });
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -344,24 +398,13 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
 
             _buildSectionTitle('Category'),
             const Gap(16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: categories
-                    .map(
-                      (cat) => CategoryChip(
-                        iconPath: cat.assetPath ?? '',
-                        label: cat.label,
-                        isSVG: false,
-                        isSelected: _selectedCategoryId == cat.id,
-                        onTap: () =>
-                            setState(() => _selectedCategoryId = cat.id),
-                      ),
-                    )
-                    .toList(),
-              ),
+            PaymentCategorySection(
+              categoriesState: categoriesState,
+              selectedCategoryId: _selectedCategoryId,
+              onCategorySelected: (id) =>
+                  setState(() => _selectedCategoryId = id),
+              onAddCategory: _showAddCategorySheet,
+              onReloadCategories: _repairCategoriesIfNeeded,
             ),
             const Gap(32),
             _buildSectionTitle('Date'),

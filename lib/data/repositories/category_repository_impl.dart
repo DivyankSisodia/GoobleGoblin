@@ -1,5 +1,4 @@
 import '../../core/DB/db_helper.dart';
-import '../../core/app_images.dart';
 import '../../core/errors/failures.dart';
 import '../../core/models/category.dart';
 import '../../core/utils/result.dart';
@@ -104,47 +103,13 @@ class CategoryRepositoryImpl implements CategoryRepository {
 
   @override
   List<Category> getDefaultCategories() {
-    return [
-      Category(label: 'Food & Dining', icon: 'restaurant'),
-      Category(label: 'Shopping', icon: 'shopping_bag'),
-      Category(label: 'Transportation', icon: 'directions_car'),
-      Category(label: 'Entertainment', icon: 'movie'),
-      Category(label: 'Bills & Utilities', icon: 'receipt_long'),
-      Category(label: 'Health & Fitness', icon: 'fitness_center'),
-      Category(label: 'Travel', icon: 'flight'),
-      Category(label: 'Education', icon: 'school'),
-      Category(label: 'Subscriptions', icon: 'subscriptions'),
-      Category(label: 'Grocery', icon: 'grocery', assetPath: AppImages.grocery),
-      Category(label: 'Personal Care', icon: 'spa'),
-      Category(label: 'Others', icon: 'category'),
-    ];
+    return PredefinedCategories.all;
   }
 
   @override
   AsyncResult<bool> seedDefaultCategories() async {
     try {
-      final existingResult = await getAllCategories();
-
-      if (existingResult.isFailure) {
-        return ResultHelper.failure(existingResult.failureValue);
-      }
-
-      final existing = existingResult.successValue;
-
-      // Only seed if no categories exist
-      if (existing.isNotEmpty) {
-        return ResultHelper.success(true);
-      }
-
-      final defaultCategories = getDefaultCategories();
-
-      for (final category in defaultCategories) {
-        final insertResult = await insertCategory(category);
-        if (insertResult.isFailure) {
-          return ResultHelper.failure(insertResult.failureValue);
-        }
-      }
-
+      await _dbHelper.seedPredefinedCategories();
       return ResultHelper.success(true);
     } catch (e) {
       return ResultHelper.failure(

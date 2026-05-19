@@ -17,7 +17,7 @@ class DatabaseHelper {
   DatabaseHelper._init();
 
   /// Current database version
-  static const int _dbVersion = 7;
+  static const int _dbVersion = 9;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -39,8 +39,11 @@ class DatabaseHelper {
 
     // Repair any records that are missing UUIDs (e.g. categories seeded
     // before the UUID fix). This is idempotent and fast when no rows match.
+    await _repairCardsSchemaCompatibility(db);
+    await _repairCategoriesSchemaCompatibility(db);
     await _repairMissingUuids(db);
     await _repairCategoryAssetPathsToPng(db);
+    await _normalizeCategoriesToPredefinedSet(db);
 
     // Initialize sqflite_live for debugging (only in debug mode)
     assert(() {
@@ -89,6 +92,107 @@ class DatabaseHelper {
     } catch (_) {}
   }
 
+  Future<void> _repairCardsSchemaCompatibility(Database db) async {
+    try {
+      final columns = await db.rawQuery('PRAGMA table_info(cards)');
+      final columnNames = columns
+          .map((row) => row['name']?.toString() ?? '')
+          .where((name) => name.isNotEmpty)
+          .toSet();
+
+      if (!columnNames.contains('createdAt')) {
+        await db.execute('ALTER TABLE cards ADD COLUMN createdAt TEXT');
+      }
+      if (!columnNames.contains('updatedAt')) {
+        await db.execute('ALTER TABLE cards ADD COLUMN updatedAt TEXT');
+      }
+      if (!columnNames.contains('isDeleted')) {
+        await db.execute(
+          'ALTER TABLE cards ADD COLUMN isDeleted INTEGER DEFAULT 0',
+        );
+      }
+
+      if (columnNames.contains('created_at')) {
+        await db.execute('''
+          UPDATE cards
+          SET createdAt = COALESCE(createdAt, created_at, date)
+          WHERE createdAt IS NULL
+        ''');
+      } else {
+        await db.execute('''
+          UPDATE cards
+          SET createdAt = COALESCE(createdAt, date)
+          WHERE createdAt IS NULL
+        ''');
+      }
+
+      if (columnNames.contains('updated_at')) {
+        await db.execute('''
+          UPDATE cards
+          SET updatedAt = COALESCE(updatedAt, updated_at, createdAt, date)
+          WHERE updatedAt IS NULL
+        ''');
+      } else {
+        await db.execute('''
+          UPDATE cards
+          SET updatedAt = COALESCE(updatedAt, createdAt, date)
+          WHERE updatedAt IS NULL
+        ''');
+      }
+
+      await db.execute('''
+        UPDATE cards
+        SET isDeleted = COALESCE(isDeleted, 0)
+        WHERE isDeleted IS NULL
+      ''');
+    } catch (_) {}
+  }
+
+  Future<void> _repairCategoriesSchemaCompatibility(Database db) async {
+    try {
+      final columnNames = await _getColumnNames(db, 'categories');
+
+      if (!columnNames.contains('assetPath')) {
+        await db.execute('ALTER TABLE categories ADD COLUMN assetPath TEXT');
+      }
+      if (!columnNames.contains('isPredefined')) {
+        await db.execute(
+          'ALTER TABLE categories ADD COLUMN isPredefined INTEGER DEFAULT 1',
+        );
+      }
+      if (!columnNames.contains('uuid')) {
+        await db.execute('ALTER TABLE categories ADD COLUMN uuid TEXT');
+      }
+      if (!columnNames.contains('syncStatus')) {
+        await db.execute(
+          "ALTER TABLE categories ADD COLUMN syncStatus TEXT DEFAULT 'PENDING_CREATE'",
+        );
+      }
+      if (!columnNames.contains('lastSyncedAt')) {
+        await db.execute('ALTER TABLE categories ADD COLUMN lastSyncedAt TEXT');
+      }
+      if (!columnNames.contains('isDeleted')) {
+        await db.execute(
+          'ALTER TABLE categories ADD COLUMN isDeleted INTEGER DEFAULT 0',
+        );
+      }
+
+      await db.execute('''
+        UPDATE categories
+        SET isPredefined = COALESCE(isPredefined, 1),
+            syncStatus = COALESCE(syncStatus, 'PENDING_CREATE'),
+            isDeleted = COALESCE(isDeleted, 0)
+      ''');
+
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_categories_uuid ON categories(uuid)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_categories_syncStatus ON categories(syncStatus)',
+      );
+    } catch (_) {}
+  }
+
   /// Version 4 migration: Add account types, credit limits, app settings
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 4) {
@@ -102,6 +206,12 @@ class DatabaseHelper {
     }
     if (oldVersion < 7) {
       await _migrateToVersion7(db);
+    }
+    if (oldVersion < 8) {
+      await _migrateToVersion8(db);
+    }
+    if (oldVersion < 9) {
+      await _migrateToVersion9(db);
     }
   }
 
@@ -136,6 +246,133 @@ class DatabaseHelper {
         });
       }
     } catch (_) {}
+  }
+
+  /// Version 8 migration: Replace merchant categories with broad categories.
+  Future<void> _migrateToVersion8(Database db) async {
+    await _normalizeCategoriesToPredefinedSet(db);
+  }
+
+  /// Version 9 migration: Prune all non-canonical categories and remap data.
+  Future<void> _migrateToVersion9(Database db) async {
+    await _normalizeCategoriesToPredefinedSet(db);
+  }
+
+  Future<void> _normalizeCategoriesToPredefinedSet(Database db) async {
+    try {
+      final categoryColumns = await _getColumnNames(db, 'categories');
+      final paymentColumns = await _getColumnNames(db, 'payments');
+      final targetRows = <String, ({int id, String? uuid})>{};
+
+      for (final category in PredefinedCategories.all) {
+        final row = await _upsertPredefinedCategory(db, category);
+        targetRows[category.label] = (
+          id: row['id'] as int,
+          uuid: row['uuid'] as String?,
+        );
+      }
+
+      final activeCategories = await db.query(
+        'categories',
+        columns: ['id', 'label'],
+        where: 'COALESCE(isDeleted, 0) = 0',
+      );
+
+      for (final row in activeCategories) {
+        final id = _asInt(row['id']);
+        if (id == null) continue;
+
+        final targetLabel = PredefinedCategories.legacyTargetLabel(
+          row['label']?.toString(),
+        );
+        if (targetLabel == null) continue;
+        final target = targetRows[targetLabel] ?? targetRows['Shopping'];
+        if (target == null || target.id == id) continue;
+
+        await db.update(
+          'payments',
+          _filterColumns({
+            'categoryId': target.id,
+            'categoryUuid': target.uuid,
+          }, paymentColumns),
+          where: 'categoryId = ?',
+          whereArgs: [id],
+        );
+
+        await db.update(
+          'categories',
+          _filterColumns({
+            'isDeleted': 1,
+            'syncStatus': SyncStatus.pendingDelete.dbValue,
+          }, categoryColumns),
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<Map<String, Object?>> _upsertPredefinedCategory(
+    Database db,
+    Category category,
+  ) async {
+    final categoryColumns = await _getColumnNames(db, 'categories');
+    final rows = await db.query(
+      'categories',
+      where: 'LOWER(label) = ?',
+      whereArgs: [category.label.toLowerCase()],
+      orderBy: 'COALESCE(isDeleted, 0) ASC, id ASC',
+      limit: 1,
+    );
+
+    if (rows.isNotEmpty) {
+      final id = rows.first['id'] as int;
+      final uuid = rows.first['uuid'] as String? ?? const Uuid().v4();
+      await db.update(
+        'categories',
+        _filterColumns({
+          'label': category.label,
+          'icon': category.icon,
+          'assetPath': category.assetPath,
+          'isPredefined': 1,
+          'uuid': uuid,
+          'syncStatus': SyncStatus.pendingUpdate.dbValue,
+          'isDeleted': 0,
+        }, categoryColumns),
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      return {'id': id, 'uuid': uuid};
+    }
+
+    final uuid = const Uuid().v4();
+    final id = await db.insert(
+      'categories',
+      _filterColumns({
+        'label': category.label,
+        'icon': category.icon,
+        'assetPath': category.assetPath,
+        'isPredefined': 1,
+        'uuid': uuid,
+        'syncStatus': SyncStatus.pendingCreate.dbValue,
+        'isDeleted': 0,
+      }, categoryColumns),
+    );
+    return {'id': id, 'uuid': uuid};
+  }
+
+  Future<void> _ensurePredefinedCategories(Database db) async {
+    for (final category in PredefinedCategories.all) {
+      await _upsertPredefinedCategory(db, category);
+    }
+  }
+
+  Future<Set<String>> _getColumnNames(Database db, String table) async {
+    final columns = await db.rawQuery('PRAGMA table_info($table)');
+    return columns
+        .map((row) => row['name']?.toString() ?? '')
+        .where((name) => name.isNotEmpty)
+        .toSet();
   }
 
   Future<void> _migrateToVersion4(Database db) async {
@@ -573,21 +810,10 @@ class DatabaseHelper {
   Future<void> seedPredefinedCategories() async {
     final db = await database;
 
-    // Check if already seeded
-    final seeded = await getSetting(AppSettingsKeys.categoriesSeeded);
-    if (seeded == 'true') return;
-
-    // Insert predefined categories with UUIDs for sync
-    for (final category in PredefinedCategories.all) {
-      await db.insert('categories', {
-        'label': category.label,
-        'icon': category.icon,
-        'assetPath': category.assetPath,
-        'isPredefined': 1,
-        'uuid': generateUuid(),
-        'syncStatus': SyncStatus.pendingCreate.dbValue,
-      }, conflictAlgorithm: ConflictAlgorithm.ignore);
-    }
+    // Keep this idempotent. Older installs may have the seeded flag set while
+    // category rows are missing, soft-deleted, duplicated, or still on legacy
+    // merchant names.
+    await _normalizeCategoriesToPredefinedSet(db);
 
     // Mark as seeded
     await setSetting(AppSettingsKeys.categoriesSeeded, 'true');
@@ -596,12 +822,31 @@ class DatabaseHelper {
   /// Get all categories (excluding soft-deleted)
   Future<List<Category>> getAllCategories() async {
     final db = await database;
-    final result = await db.query(
+    var result = await db.query(
       'categories',
-      where: 'isDeleted = 0',
+      where: 'COALESCE(isDeleted, 0) = 0',
       orderBy: 'label ASC',
     );
-    return result.map((json) => Category.fromMap(json)).toList();
+    if (result.isEmpty) {
+      await seedPredefinedCategories();
+      result = await db.query(
+        'categories',
+        where: 'COALESCE(isDeleted, 0) = 0',
+        orderBy: 'label ASC',
+      );
+    }
+    final categories = result.map((json) => Category.fromMap(json)).toList();
+    final preferredOrder = {
+      for (var index = 0; index < PredefinedCategories.all.length; index++)
+        PredefinedCategories.all[index].label.toLowerCase(): index,
+    };
+    categories.sort((a, b) {
+      final orderA = preferredOrder[a.label.toLowerCase()] ?? 999;
+      final orderB = preferredOrder[b.label.toLowerCase()] ?? 999;
+      if (orderA != orderB) return orderA.compareTo(orderB);
+      return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+    });
+    return categories;
   }
 
   /// Get category by ID
@@ -635,7 +880,7 @@ class DatabaseHelper {
     final db = await database;
     final result = await db.query(
       'cards',
-      where: 'isDeleted = 0',
+      where: 'COALESCE(isDeleted, 0) = 0',
       orderBy: 'isPrimary DESC, bankName ASC',
     );
     return result.map((json) => BankCard.fromMap(json)).toList();
@@ -1523,6 +1768,343 @@ class DatabaseHelper {
   }
 
   // ============================================================
+  // LOCAL DATABASE BACKUP / RESTORE
+  // ============================================================
+
+  static const List<String> _backupTables = [
+    'app_settings',
+    'categories',
+    'cards',
+    'payments',
+    'wishlist',
+    'card_history',
+    'daily_expenditure',
+    'monthly_expenditure',
+  ];
+
+  Future<Map<String, dynamic>> exportLocalDbSnapshot() async {
+    final db = await database;
+    final tables = <String, List<Map<String, Object?>>>{};
+
+    for (final table in _backupTables) {
+      try {
+        tables[table] = await db.query(table);
+      } catch (_) {
+        tables[table] = const [];
+      }
+    }
+
+    return {
+      'format': 'gooble_goblin_local_db',
+      'formatVersion': 1,
+      'dbVersion': _dbVersion,
+      'exportedAt': DateTime.now().toIso8601String(),
+      'tables': tables,
+    };
+  }
+
+  Future<void> importLocalDbSnapshot(Map<String, dynamic> snapshot) async {
+    final tablesValue = snapshot['tables'];
+    if (tablesValue is! Map) {
+      throw const FormatException('Invalid GoobleGoblin backup JSON');
+    }
+
+    final db = await database;
+    final columnsByTable = <String, Set<String>>{};
+    for (final table in _backupTables) {
+      columnsByTable[table] = await _getTableColumns(db, table);
+    }
+
+    await db.transaction((txn) async {
+      await txn.delete('payments');
+      await txn.delete('card_history');
+      await txn.delete('daily_expenditure');
+      await txn.delete('monthly_expenditure');
+      await txn.delete('cards');
+      await txn.delete('categories');
+      await txn.delete('wishlist');
+      await txn.delete('app_settings');
+
+      await _insertImportedRows(
+        txn,
+        'app_settings',
+        _rowsFromSnapshot(tablesValue['app_settings']),
+        columnsByTable['app_settings']!,
+      );
+
+      await _insertImportedRows(
+        txn,
+        'cards',
+        _rowsFromSnapshot(tablesValue['cards']),
+        columnsByTable['cards']!,
+      );
+
+      await _insertImportedRows(
+        txn,
+        'wishlist',
+        _rowsFromSnapshot(tablesValue['wishlist']),
+        columnsByTable['wishlist']!,
+      );
+
+      await _insertImportedRows(
+        txn,
+        'card_history',
+        _rowsFromSnapshot(tablesValue['card_history']),
+        columnsByTable['card_history']!,
+      );
+
+      final importedCategories = _rowsFromSnapshot(tablesValue['categories']);
+      final categoryTargets = await _insertImportCategories(
+        txn,
+        importedCategories,
+        columnsByTable['categories']!,
+      );
+
+      await _insertImportPayments(
+        txn,
+        _rowsFromSnapshot(tablesValue['payments']),
+        categoryTargets,
+        columnsByTable['payments']!,
+      );
+
+      await _rebuildExpenditureAggregates(txn);
+
+      await txn.insert('app_settings', {
+        'key': AppSettingsKeys.categoriesSeeded,
+        'value': 'true',
+        'updatedAt': DateTime.now().toIso8601String(),
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+      final hasCards = (await txn.query('cards', limit: 1)).isNotEmpty;
+      final hasPayments = (await txn.query('payments', limit: 1)).isNotEmpty;
+      if (hasCards || hasPayments) {
+        await txn.insert('app_settings', {
+          'key': AppSettingsKeys.onboardingCompleted,
+          'value': 'true',
+          'updatedAt': DateTime.now().toIso8601String(),
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
+  }
+
+  Future<Set<String>> _getTableColumns(Database db, String table) async {
+    final result = await db.rawQuery('PRAGMA table_info($table)');
+    return result.map((row) => row['name'] as String).toSet();
+  }
+
+  List<Map<String, Object?>> _rowsFromSnapshot(Object? value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map(
+          (row) => row.map(
+            (key, value) => MapEntry(key.toString(), value as Object?),
+          ),
+        )
+        .toList();
+  }
+
+  Future<void> _insertImportedRows(
+    Transaction txn,
+    String table,
+    List<Map<String, Object?>> rows,
+    Set<String> columns,
+  ) async {
+    for (final row in rows) {
+      final filtered = _filterColumns(row, columns);
+      if (filtered.isEmpty) continue;
+      await txn.insert(
+        table,
+        filtered,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+  }
+
+  Map<String, Object?> _filterColumns(
+    Map<String, Object?> row,
+    Set<String> columns,
+  ) {
+    return {
+      for (final entry in row.entries)
+        if (columns.contains(entry.key)) entry.key: entry.value,
+    };
+  }
+
+  Future<Map<int, ({int id, String? uuid})>> _insertImportCategories(
+    Transaction txn,
+    List<Map<String, Object?>> importedCategories,
+    Set<String> columns,
+  ) async {
+    final targetByLabel = <String, ({int id, String? uuid})>{};
+    final importedTargetLabels = <String, String>{};
+
+    for (final row in importedCategories) {
+      final oldId = _asInt(row['id']);
+      final label = row['label']?.toString() ?? '';
+      if (oldId != null) importedTargetLabels[oldId.toString()] = label;
+    }
+
+    for (final category in PredefinedCategories.all) {
+      final importedMatch = importedCategories.firstWhere(
+        (row) => _targetCategoryLabel(row['label']?.toString()) == category.label,
+        orElse: () => const {},
+      );
+      final preferredUuid = importedMatch['uuid']?.toString();
+
+      final row = <String, Object?>{
+        'label': category.label,
+        'icon': category.icon,
+        'assetPath': category.assetPath,
+        'isPredefined': 1,
+        'uuid': preferredUuid?.isNotEmpty == true
+            ? preferredUuid
+            : const Uuid().v4(),
+        'syncStatus': SyncStatus.pendingUpdate.dbValue,
+        'isDeleted': 0,
+      };
+      final id = await txn.insert(
+        'categories',
+        _filterColumns(row, columns),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      targetByLabel[_labelKey(category.label)] = (
+        id: id,
+        uuid: row['uuid'] as String?,
+      );
+    }
+
+    for (final row in importedCategories) {
+      final oldId = _asInt(row['id']);
+      if (oldId == null) continue;
+
+      final targetLabel = _targetCategoryLabel(row['label']?.toString());
+      final targetKey = _labelKey(targetLabel);
+      if (!targetByLabel.containsKey(targetKey)) {
+        final icon = row['icon']?.toString().trim();
+        final assetPath = row['assetPath']?.toString().trim();
+        final preferredUuid = row['uuid']?.toString();
+        final categoryUuid = preferredUuid?.isNotEmpty == true
+            ? preferredUuid
+            : const Uuid().v4();
+        final insertedId = await txn.insert(
+          'categories',
+          _filterColumns({
+            'label': targetLabel,
+            'icon': icon?.isNotEmpty == true ? icon : 'category',
+            'assetPath': assetPath?.isNotEmpty == true ? assetPath : null,
+            'isPredefined': 0,
+            'uuid': categoryUuid,
+            'syncStatus': SyncStatus.pendingUpdate.dbValue,
+            'isDeleted': 0,
+          }, columns),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+        targetByLabel[targetKey] = (
+          id: insertedId,
+          uuid: categoryUuid,
+        );
+      }
+    }
+
+    final mapped = <int, ({int id, String? uuid})>{};
+    for (final row in importedCategories) {
+      final oldId = _asInt(row['id']);
+      if (oldId == null) continue;
+      final targetLabel = _targetCategoryLabel(importedTargetLabels['$oldId']);
+      mapped[oldId] =
+          targetByLabel[_labelKey(targetLabel)] ??
+          targetByLabel[_labelKey('Shopping')]!;
+    }
+
+    mapped[-1] = targetByLabel[_labelKey('Shopping')]!;
+    return mapped;
+  }
+
+  Future<void> _insertImportPayments(
+    Transaction txn,
+    List<Map<String, Object?>> rows,
+    Map<int, ({int id, String? uuid})> categoryTargets,
+    Set<String> columns,
+  ) async {
+    final fallbackCategory = categoryTargets.values.firstOrNull;
+
+    for (final row in rows) {
+      final oldCategoryId = _asInt(row['categoryId']);
+      final categoryTarget =
+          (oldCategoryId != null ? categoryTargets[oldCategoryId] : null) ??
+          fallbackCategory;
+      final normalized = Map<String, Object?>.from(row);
+
+      if (categoryTarget != null) {
+        normalized['categoryId'] = categoryTarget.id;
+        normalized['categoryUuid'] = categoryTarget.uuid;
+      }
+      normalized['isDeleted'] ??= 0;
+      normalized['syncStatus'] ??= SyncStatus.pendingUpdate.dbValue;
+      normalized['createdAt'] ??= DateTime.now().toIso8601String();
+
+      await txn.insert(
+        'payments',
+        _filterColumns(normalized, columns),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+  }
+
+  String _targetCategoryLabel(String? label) {
+    final remapped = PredefinedCategories.legacyTargetLabel(label);
+    if (remapped != null) return remapped;
+
+    final trimmed = label?.trim() ?? '';
+    return trimmed.isNotEmpty ? trimmed : 'Shopping';
+  }
+
+  String _labelKey(String label) {
+    return label.trim().toLowerCase();
+  }
+
+  int? _asInt(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  Future<void> _rebuildExpenditureAggregates(Transaction txn) async {
+    await txn.delete('daily_expenditure');
+    await txn.delete('monthly_expenditure');
+
+    final rows = await txn.rawQuery('''
+      SELECT DISTINCT cardId, date(date) as day
+      FROM payments
+      WHERE cardId IS NOT NULL AND date IS NOT NULL
+    ''');
+
+    final monthKeys = <String>{};
+    for (final row in rows) {
+      final cardId = _asInt(row['cardId']);
+      final day = row['day']?.toString();
+      if (cardId == null || day == null || day.isEmpty) continue;
+
+      await _updateDailyExpenditureWithTxn(txn, cardId, day);
+      final date = DateTime.tryParse(day);
+      if (date == null) continue;
+
+      final yearMonth = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+      monthKeys.add('$cardId|$yearMonth');
+    }
+
+    for (final key in monthKeys) {
+      final parts = key.split('|');
+      await _updateMonthlyExpenditureWithTxn(
+        txn,
+        int.parse(parts[0]),
+        parts[1],
+      );
+    }
+  }
+
+  // ============================================================
   // UUID GENERATION
   // ============================================================
 
@@ -1578,7 +2160,7 @@ class DatabaseHelper {
         amount: 15000,
         date: DateTime(now.year, now.month, 1).toIso8601String(),
         cardId: cardIds['HDFC Bank']!,
-        categoryId: categoryMap['Rent']!,
+        categoryId: categoryMap['Home Utils']!,
         isRecurring: true,
         frequency: 'Monthly',
         reminderNotification: true,
@@ -1588,7 +2170,7 @@ class DatabaseHelper {
         amount: 799,
         date: DateTime(now.year, now.month, 5).toIso8601String(),
         cardId: cardIds['ICICI Amazon']!,
-        categoryId: categoryMap['Netflix']!,
+        categoryId: categoryMap['Subscriptions']!,
         isRecurring: true,
         frequency: 'Monthly',
         reminderNotification: true,
@@ -1598,7 +2180,7 @@ class DatabaseHelper {
         amount: 189,
         date: DateTime(now.year, now.month, 10).toIso8601String(),
         cardId: cardIds['SBI Savings']!,
-        categoryId: categoryMap['YouTube']!,
+        categoryId: categoryMap['Subscriptions']!,
         isRecurring: true,
         frequency: 'Monthly',
         reminderNotification: false,
@@ -1629,15 +2211,15 @@ class DatabaseHelper {
     final historicalCategories = [
       'Shopping',
       'Food & Dining',
-      'Transport',
+      'Bike',
       'Food & Dining',
-      'Zomato',
-      'Netflix',
-      'Transport',
-      'Utilities',
+      'Food & Dining',
+      'Subscriptions',
+      'Bike',
+      'Home Utils',
       'Shopping',
-      'Utilities',
-      'Utilities',
+      'Home Utils',
+      'Home Utils',
       'Shopping',
     ];
 

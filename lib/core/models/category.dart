@@ -95,51 +95,11 @@ class PredefinedCategories {
   PredefinedCategories._();
 
   static const List<Category> all = [
-    // Subscriptions & Entertainment
-    Category(
-      label: 'Netflix',
-      icon: 'netflix',
-      assetPath: AppImages.netflix,
-      color: Color(0xFFE50914),
-    ),
-    Category(
-      label: 'YouTube',
-      icon: 'youtube',
-      assetPath: AppImages.youtube,
-      color: Color(0xFFFF0000),
-    ),
-    Category(
-      label: 'Amazon',
-      icon: 'amazon',
-      assetPath: AppImages.amazon,
-      color: Color(0xFFFF9900),
-    ),
-
-    // Food & Delivery
-    Category(
-      label: 'Zomato',
-      icon: 'zomato',
-      assetPath: AppImages.zomato,
-      color: Color(0xFFE23744),
-    ),
-    Category(
-      label: 'Swiggy',
-      icon: 'swiggy',
-      assetPath: AppImages.swiggy,
-      color: Color(0xFFFC8019),
-    ),
-    Category(
-      label: 'Food & Dining',
-      icon: 'food',
-      assetPath: AppImages.food,
-      color: Color(0xFFFF6B6B),
-    ),
-
-    // Shopping
+    // Broad spending groups. Merchants/apps are captured from transaction notes.
     Category(
       label: 'Shopping',
       icon: 'shopping',
-      assetPath: AppImages.bagShopping,
+      assetPath: AppImages.shopping,
       color: Color(0xFF9B59B6),
     ),
     Category(
@@ -148,42 +108,105 @@ class PredefinedCategories {
       assetPath: AppImages.grocery,
       color: Color(0xFF27AE60),
     ),
-
-    // Transportation
     Category(
-      label: 'Transport',
-      icon: 'transport',
-      assetPath: AppImages.bike,
-      color: Color(0xFF3498DB),
-    ),
-
-    // Bills & Utilities
-    Category(
-      label: 'Mobile Recharge',
-      icon: 'mobile',
-      assetPath: AppImages.mobile,
-      color: Color(0xFF2ECC71),
-    ),
-    Category(
-      label: 'Utilities',
-      icon: 'utilities',
-      assetPath: AppImages.utils,
+      label: 'Home Utils',
+      icon: 'home_utils',
+      assetPath: AppImages.homeUtils,
       color: Color(0xFF1ABC9C),
     ),
     Category(
-      label: 'Rent',
-      icon: 'rent',
-      assetPath: AppImages.rent,
-      color: Color(0xFFE74C3C),
+      label: 'Subscriptions',
+      icon: 'subscriptions',
+      assetPath: AppImages.subscriptions,
+      color: Color(0xFFE50914),
     ),
-
-    // Cash & Misc
     Category(
-      label: 'Cash Withdrawal',
-      icon: 'cash',
-      assetPath: AppImages.cash,
-      color: Color(0xFF27AE60),
+      label: 'Bike',
+      icon: 'bike',
+      assetPath: AppImages.bike,
+      color: Color(0xFF3498DB),
     ),
+    Category(
+      label: 'Food & Dining',
+      icon: 'food',
+      assetPath: AppImages.foodDining,
+      color: Color(0xFFFF6B6B),
+    ),
+  ];
+
+  static const Map<String, String> legacyLabelRemap = {
+    'netflix': 'Subscriptions',
+    'youtube': 'Subscriptions',
+    'entertainment': 'Subscriptions',
+    'amazon': 'Shopping',
+    'personal care': 'Shopping',
+    'others': 'Shopping',
+    'zomato': 'Food & Dining',
+    'swiggy': 'Food & Dining',
+    'transport': 'Bike',
+    'transportation': 'Bike',
+    'travel': 'Bike',
+    'utilities': 'Home Utils',
+    'bills & utilities': 'Home Utils',
+    'mobile recharge': 'Home Utils',
+    'rent': 'Home Utils',
+    'cash withdrawal': 'Home Utils',
+    'health & fitness': 'Home Utils',
+    'education': 'Home Utils',
+  };
+
+  /// Merchant/service keywords used to deep-dive transactions from notes.
+  static const List<String> transactionNoteKeywords = [
+    'amazon',
+    'flipkart',
+    'myntra',
+    'ajio',
+    'meesho',
+    'nykaa',
+    'tata cliq',
+    'snapdeal',
+    'shopclues',
+    'firstcry',
+    'blinkit',
+    'zepto',
+    'bigbasket',
+    'dmart',
+    'jiomart',
+    'reliance fresh',
+    'swiggy',
+    'zomato',
+    'dominos',
+    'pizza hut',
+    'mcdonalds',
+    'kfc',
+    'starbucks',
+    'barbeque nation',
+    'uber',
+    'ola',
+    'rapido',
+    'indigo',
+    'irctc',
+    'makemytrip',
+    'netflix',
+    'youtube',
+    'spotify',
+    'hotstar',
+    'prime video',
+    'sony liv',
+    'jio',
+    'airtel',
+    'vodafone',
+    'electricity',
+    'water bill',
+    'gas bill',
+    'rent',
+    'maintenance',
+    'urban company',
+    'apollo',
+    'medplus',
+    'pharmeasy',
+    'bookmyshow',
+    'cred',
   ];
 
   /// Get category by label
@@ -223,5 +246,26 @@ class PredefinedCategories {
     if (iconName == null) return null;
     final category = getByIcon(iconName);
     return category?.assetPath;
+  }
+
+  static String? legacyTargetLabel(String? label) {
+    final normalized = (label ?? '').trim().toLowerCase();
+    if (normalized.isEmpty) return null;
+
+    for (final category in all) {
+      if (category.label.toLowerCase() == normalized) return category.label;
+    }
+
+    return legacyLabelRemap[normalized];
+  }
+
+  static bool isReservedNoteKeywordLabel(String? label) {
+    final normalized = (label ?? '').trim().toLowerCase();
+    if (normalized.isEmpty) return false;
+    return legacyLabelRemap.containsKey(normalized);
+  }
+
+  static bool isSystemManagedLabel(String? label) {
+    return legacyTargetLabel(label) != null;
   }
 }

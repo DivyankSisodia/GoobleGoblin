@@ -193,6 +193,19 @@ class AnalyticsScreen extends ConsumerWidget {
 
               const SliverToBoxAdapter(child: Gap(24)),
 
+              if (analyticsState.noteKeywordData.isNotEmpty) ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _buildNoteKeywordDeepDive(
+                      context,
+                      analyticsState.noteKeywordData,
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(child: Gap(24)),
+              ],
+
               // Spending Insights Cards
               SliverToBoxAdapter(
                 child: Padding(
@@ -568,6 +581,110 @@ class AnalyticsScreen extends ConsumerWidget {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildNoteKeywordDeepDive(
+    BuildContext context,
+    List<NoteKeywordSpendingData> keywordData,
+  ) {
+    final topKeywords = keywordData.take(8).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.accentCyan.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.accentCyan.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.manage_search_rounded,
+                  color: AppColors.accentCyan,
+                  size: 20,
+                ),
+              ),
+              const Gap(12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Note Deep Dive',
+                      style: GoogleFonts.montserrat(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const Gap(4),
+                    Text(
+                      'Matched from brands and services in transaction notes',
+                      style: GoogleFonts.montserrat(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const Gap(16),
+          ...topKeywords.map((data) => _buildKeywordRow(data)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKeywordRow(NoteKeywordSpendingData data) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  data.label,
+                  style: GoogleFonts.montserrat(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+                const Gap(3),
+                Text(
+                  '${data.transactionCount} transaction${data.transactionCount == 1 ? '' : 's'}',
+                  style: GoogleFonts.montserrat(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            CurrencyUtils.formatCompact(data.amount),
+            style: GoogleFonts.montserrat(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: AppColors.accentCyan,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

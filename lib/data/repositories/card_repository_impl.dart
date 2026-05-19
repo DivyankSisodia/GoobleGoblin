@@ -1,4 +1,3 @@
-
 import '../../core/DB/db_helper.dart';
 import '../../core/errors/failures.dart';
 import '../../core/models/card.dart';
@@ -45,7 +44,9 @@ class CardRepositoryImpl implements CardRepository {
       final card = await _dbHelper.getPrimaryCard();
       return ResultHelper.success(card);
     } catch (e) {
-      return ResultHelper.failure(DatabaseFailure.fetchFailed('primary card', e));
+      return ResultHelper.failure(
+        DatabaseFailure.fetchFailed('primary card', e),
+      );
     }
   }
 
@@ -64,7 +65,7 @@ class CardRepositoryImpl implements CardRepository {
 
     try {
       final map = card.toMap();
-      map['updated_at'] = DateTime.now().toIso8601String();
+      map['updatedAt'] = DateTime.now().toIso8601String();
       final id = await _dbHelper.insertCard(BankCard.fromMap(map));
       return ResultHelper.success(id);
     } catch (e) {
@@ -96,7 +97,7 @@ class CardRepositoryImpl implements CardRepository {
 
     try {
       final map = card.toMap();
-      map['updated_at'] = DateTime.now().toIso8601String();
+      map['updatedAt'] = DateTime.now().toIso8601String();
       final rowsAffected = await _dbHelper.updateCard(BankCard.fromMap(map));
       return ResultHelper.success(rowsAffected > 0);
     } catch (e) {

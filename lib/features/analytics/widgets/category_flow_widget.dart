@@ -334,15 +334,20 @@ class _CategoryFlowCardState extends State<_CategoryFlowCard>
   IconData _getCategoryIcon(String iconName) {
     final iconMap = {
       'restaurant': Icons.restaurant_rounded,
+      'food': Icons.restaurant_rounded,
       'shopping_bag': Icons.shopping_bag_rounded,
+      'shopping': Icons.shopping_bag_rounded,
       'directions_car': Icons.directions_car_rounded,
+      'bike': Icons.two_wheeler_rounded,
       'movie': Icons.movie_rounded,
       'receipt_long': Icons.receipt_long_rounded,
+      'home_utils': Icons.home_repair_service_rounded,
       'fitness_center': Icons.fitness_center_rounded,
       'flight': Icons.flight_rounded,
       'school': Icons.school_rounded,
       'subscriptions': Icons.subscriptions_rounded,
       'local_grocery_store': Icons.local_grocery_store_rounded,
+      'grocery': Icons.local_grocery_store_rounded,
       'spa': Icons.spa_rounded,
       'category': Icons.category_rounded,
     };

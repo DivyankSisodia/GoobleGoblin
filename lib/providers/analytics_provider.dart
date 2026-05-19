@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/models/category.dart';
+import '../../core/models/payment.dart';
 import '../../data/repositories/payment_repository.dart';
 import '../../data/repositories/payment_repository_impl.dart';
 import '../../core/utils/date_utils.dart';
@@ -69,11 +71,27 @@ extension AnalyticsPeriodX on AnalyticsPeriod {
   }
 }
 
+/// Spending grouped by merchant/service keywords found in transaction notes.
+class NoteKeywordSpendingData {
+  final String keyword;
+  final String label;
+  final double amount;
+  final int transactionCount;
+
+  const NoteKeywordSpendingData({
+    required this.keyword,
+    required this.label,
+    required this.amount,
+    required this.transactionCount,
+  });
+}
+
 /// State for analytics
 class AnalyticsState {
   final SpendingAnalytics? analytics;
   final List<CategorySpendingData> categoryData;
   final List<DailySpendingData> dailyData;
+  final List<NoteKeywordSpendingData> noteKeywordData;
   final AnalyticsPeriod selectedPeriod;
   final bool isLoading;
   final String? errorMessage;
@@ -91,6 +109,7 @@ class AnalyticsState {
     this.analytics,
     this.categoryData = const [],
     this.dailyData = const [],
+    this.noteKeywordData = const [],
     this.selectedPeriod = AnalyticsPeriod.month,
     this.isLoading = false,
     this.errorMessage,
@@ -103,6 +122,7 @@ class AnalyticsState {
     SpendingAnalytics? analytics,
     List<CategorySpendingData>? categoryData,
     List<DailySpendingData>? dailyData,
+    List<NoteKeywordSpendingData>? noteKeywordData,
     AnalyticsPeriod? selectedPeriod,
     bool? isLoading,
     String? errorMessage,
@@ -114,6 +134,7 @@ class AnalyticsState {
       analytics: analytics ?? this.analytics,
       categoryData: categoryData ?? this.categoryData,
       dailyData: dailyData ?? this.dailyData,
+      noteKeywordData: noteKeywordData ?? this.noteKeywordData,
       selectedPeriod: selectedPeriod ?? this.selectedPeriod,
       isLoading: isLoading ?? this.isLoading,
       errorMessage: errorMessage,
@@ -262,9 +283,11 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsState> {
 
     // Compute future-dated scheduled one-time payments total
     double scheduledFutureTotal = 0;
+    List<NoteKeywordSpendingData> noteKeywordList = [];
     if (allPaymentsResult.isSuccess) {
       final now = DateTime.now();
-      scheduledFutureTotal = allPaymentsResult.successValue
+      final allPayments = allPaymentsResult.successValue;
+      scheduledFutureTotal = allPayments
           .where(
             (p) =>
                 !p.isRecurring &&
@@ -272,12 +295,18 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsState> {
                 (AppDateUtils.parseIso(p.date)?.isAfter(now) ?? false),
           )
           .fold(0.0, (sum, p) => sum + p.amount);
+      noteKeywordList = _buildNoteKeywordData(
+        allPayments,
+        startDate: startDate,
+        endDate: endDate,
+      );
     }
 
     state = state.copyWith(
       analytics: analyticsResult.getOrNull(),
       categoryData: categoryList,
       dailyData: dailyList,
+      noteKeywordData: noteKeywordList,
       recurringCategoryData: recurringCategoryList,
       scheduledFutureTotal: scheduledFutureTotal,
       upcomingRecurringCount: upcomingRecurringCount,
@@ -297,6 +326,57 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsState> {
   /// Refresh analytics
   Future<void> refresh() async {
     await loadAnalytics();
+  }
+
+  List<NoteKeywordSpendingData> _buildNoteKeywordData(
+    List<Payment> payments, {
+    required DateTime startDate,
+    required DateTime endDate,
+  }) {
+    final grouped = <String, ({double amount, int count})>{};
+
+    for (final payment in payments) {
+      if (payment.isDeleted) continue;
+      final date = AppDateUtils.parseIso(payment.date);
+      if (date == null || date.isBefore(startDate) || date.isAfter(endDate)) {
+        continue;
+      }
+
+      final note = payment.note?.toLowerCase() ?? '';
+      if (note.isEmpty) continue;
+
+      for (final keyword in PredefinedCategories.transactionNoteKeywords) {
+        if (!note.contains(keyword)) continue;
+        final current = grouped[keyword] ?? (amount: 0.0, count: 0);
+        grouped[keyword] = (
+          amount: current.amount + payment.amount,
+          count: current.count + 1,
+        );
+        break;
+      }
+    }
+
+    final data = grouped.entries
+        .map(
+          (entry) => NoteKeywordSpendingData(
+            keyword: entry.key,
+            label: _titleCase(entry.key),
+            amount: entry.value.amount,
+            transactionCount: entry.value.count,
+          ),
+        )
+        .toList();
+
+    data.sort((a, b) => b.amount.compareTo(a.amount));
+    return data;
+  }
+
+  String _titleCase(String value) {
+    return value
+        .split(' ')
+        .where((part) => part.isNotEmpty)
+        .map((part) => part[0].toUpperCase() + part.substring(1))
+        .join(' ');
   }
 }
 

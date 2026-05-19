@@ -2,12 +2,14 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:flutter/services.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/models/card.dart';
 import '../../../core/models/category.dart';
 import '../../../core/models/payment.dart';
+import '../../../core/services/local_db_backup_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_utils.dart';
 import '../../../core/utils/date_utils.dart';
@@ -27,6 +29,7 @@ class WalletHistoryScreen extends ConsumerStatefulWidget {
 
 class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
   final List<String> _tabs = ['All', 'Wishlist', 'Recurring', 'Recent'];
+  final LocalDbBackupService _backupService = LocalDbBackupService();
   int _selectedTabIndex = 0;
 
   @override
@@ -176,7 +179,7 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
                 ),
               ),
               IconButton(
-                onPressed: () {},
+                onPressed: () => _showBackupSheet(),
                 icon: const Icon(
                   CupertinoIcons.share,
                   color: AppColors.primaryNeon,
@@ -187,6 +190,242 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
         ],
       ),
     );
+  }
+
+  void _showBackupSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Local DB Backup',
+                style: GoogleFonts.montserrat(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const Gap(8),
+              Text(
+                'Export everything as JSON, or import an older JSON backup and remap it to the new categories.',
+                style: GoogleFonts.montserrat(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                ),
+              ),
+              const Gap(20),
+              _buildBackupAction(
+                icon: CupertinoIcons.arrow_down_doc,
+                title: 'Export JSON',
+                subtitle: 'Creates a backup file and copies JSON to clipboard',
+                onTap: () {
+                  Navigator.pop(context);
+                  _exportBackup();
+                },
+              ),
+              const Gap(12),
+              _buildBackupAction(
+                icon: CupertinoIcons.arrow_up_doc,
+                title: 'Import JSON',
+                subtitle: 'Paste a backup JSON and restore it safely',
+                onTap: () {
+                  Navigator.pop(context);
+                  _showImportDialog();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBackupAction({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceLight.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              height: 44,
+              width: 44,
+              decoration: BoxDecoration(
+                color: AppColors.primaryNeon.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: AppColors.primaryNeon),
+            ),
+            const Gap(14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.montserrat(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Gap(3),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.montserrat(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(CupertinoIcons.chevron_right, color: Colors.white30),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportBackup() async {
+    try {
+      final export = await _backupService.exportToJsonFile();
+      await Clipboard.setData(ClipboardData(text: export.json));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Backup exported and copied to clipboard: ${export.path}',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to export backup: $e')));
+    }
+  }
+
+  void _showImportDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          'Import Backup JSON?',
+          style: GoogleFonts.montserrat(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'This replaces the current local database. Old categories like Amazon, Netflix, Swiggy, and Zomato will be remapped to the new broad categories.',
+                style: GoogleFonts.montserrat(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                ),
+              ),
+              const Gap(14),
+              TextField(
+                controller: controller,
+                minLines: 6,
+                maxLines: 10,
+                style: GoogleFonts.montserrat(
+                  color: Colors.white,
+                  fontSize: 12,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Paste backup JSON here...',
+                  hintStyle: GoogleFonts.montserrat(color: Colors.white38),
+                  filled: true,
+                  fillColor: AppColors.background,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.montserrat(color: Colors.white),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              final json = controller.text.trim();
+              if (json.isEmpty) return;
+              Navigator.pop(context);
+              await _importBackup(json);
+            },
+            child: Text(
+              'Import',
+              style: GoogleFonts.montserrat(
+                color: AppColors.primaryNeon,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ).whenComplete(controller.dispose);
+  }
+
+  Future<void> _importBackup(String json) async {
+    try {
+      await _backupService.importFromJsonString(json);
+      await Future.wait([
+        ref.read(categoriesProvider.notifier).loadCategories(),
+        ref.read(cardsProvider.notifier).loadCards(),
+        ref.read(paymentsProvider.notifier).loadPayments(),
+        ref.read(wishlistProvider.notifier).loadWishlist(),
+        ref.read(analyticsProvider.notifier).refresh(),
+      ]);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Backup imported successfully')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to import backup: $e')));
+    }
   }
 
   void _showSeedConfirmation() {

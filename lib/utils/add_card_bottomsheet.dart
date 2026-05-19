@@ -30,6 +30,15 @@ class AppBottomSheet {
             final isCash = selectedTabIndex == 2;
             final hasExistingCash =
                 isCash && ref.read(cardsProvider).cards.any((c) => c.isCash);
+            final name = bankNameController.text.trim();
+            final amount = double.tryParse(amountController.text.trim()) ?? 0.0;
+            final creditLimit =
+                double.tryParse(creditLimitController.text.trim()) ?? 0.0;
+            final canSave = isCash
+                ? amount > 0
+                : isCredit
+                ? name.isNotEmpty && creditLimit > 0
+                : name.isNotEmpty && amount > 0;
 
             return Container(
               padding: EdgeInsets.only(
@@ -132,101 +141,132 @@ class AppBottomSheet {
                       width: double.infinity,
                       height: 56,
                       child: ElevatedButton(
-                        onPressed: () async {
-                          try {
-                            final name = bankNameController.text.trim();
-                            final amount = isCredit
-                                ? 0.0
-                                : double.tryParse(
-                                        amountController.text.trim(),
-                                      ) ??
-                                      0.0;
-                            final limit = isCredit
-                                ? double.tryParse(
-                                        creditLimitController.text.trim(),
-                                      ) ??
-                                      0.0
-                                : 0.0;
+                        onPressed: canSave
+                            ? () async {
+                                try {
+                                  if (!isCash && name.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Please enter a bank name',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
 
-                            if (!isCash && name.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Please enter a bank name'),
-                                ),
-                              );
-                              return;
-                            }
+                                  if (isCash && amount <= 0) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Please enter a cash amount greater than 0',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
 
-                            if (isCash) {
-                              // Check if a cash card already exists — if so, top it up
-                              final existingCash = ref
-                                  .read(cardsProvider)
-                                  .cards
-                                  .where((c) => c.isCash)
-                                  .firstOrNull;
+                                  if (!isCash && !isCredit && amount <= 0) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Please enter a balance greater than 0',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
 
-                              bool success;
-                              if (existingCash != null) {
-                                final updatedCash = existingCash.copyWith(
-                                  balance: existingCash.balance + amount,
-                                );
-                                success = await ref
-                                    .read(cardsProvider.notifier)
-                                    .updateCard(updatedCash);
-                              } else {
-                                success = await ref
-                                    .read(cardsProvider.notifier)
-                                    .addCard(BankCard.cash(balance: amount));
+                                  if (isCredit && creditLimit <= 0) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Please enter a credit limit greater than 0',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  if (isCash) {
+                                    // Check if a cash card already exists — if so, top it up
+                                    final existingCash = ref
+                                        .read(cardsProvider)
+                                        .cards
+                                        .where((c) => c.isCash)
+                                        .firstOrNull;
+
+                                    bool success;
+                                    if (existingCash != null) {
+                                      final updatedCash = existingCash.copyWith(
+                                        balance: existingCash.balance + amount,
+                                      );
+                                      success = await ref
+                                          .read(cardsProvider.notifier)
+                                          .updateCard(updatedCash);
+                                    } else {
+                                      success = await ref
+                                          .read(cardsProvider.notifier)
+                                          .addCard(
+                                            BankCard.cash(balance: amount),
+                                          );
+                                    }
+
+                                    if (success && context.mounted) {
+                                      Navigator.pop(context);
+                                    } else if (!success && context.mounted) {
+                                      final message =
+                                          ref
+                                              .read(cardsProvider)
+                                              .errorMessage ??
+                                          'Failed to save cash entry';
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(content: Text(message)),
+                                      );
+                                    }
+                                    return;
+                                  }
+
+                                  BankCard card;
+                                  if (isCredit) {
+                                    card = BankCard.credit(
+                                      bankName: name,
+                                      creditLimit: creditLimit,
+                                    );
+                                  } else {
+                                    card = BankCard.debit(
+                                      bankName: name,
+                                      balance: amount,
+                                    );
+                                  }
+
+                                  final success = await ref
+                                      .read(cardsProvider.notifier)
+                                      .addCard(card);
+                                  if (success && context.mounted) {
+                                    Navigator.pop(context);
+                                  } else if (!success && context.mounted) {
+                                    final message =
+                                        ref.read(cardsProvider).errorMessage ??
+                                        'Failed to save card';
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(message)),
+                                    );
+                                  }
+                                } catch (e, stackTrace) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Error: $e'),
+                                      duration: const Duration(seconds: 5),
+                                    ),
+                                  );
+                                  debugPrint('Error saving card: $e');
+                                  debugPrint('Stack trace: $stackTrace');
+                                }
                               }
-
-                              if (success && context.mounted) {
-                                Navigator.pop(context);
-                              } else if (!success && context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Failed to save cash entry'),
-                                  ),
-                                );
-                              }
-                              return;
-                            }
-
-                            BankCard card;
-                            if (isCredit) {
-                              card = BankCard.credit(
-                                bankName: name,
-                                creditLimit: limit,
-                              );
-                            } else {
-                              card = BankCard.debit(
-                                bankName: name,
-                                balance: amount,
-                              );
-                            }
-
-                            final success = await ref
-                                .read(cardsProvider.notifier)
-                                .addCard(card);
-                            if (success && context.mounted) {
-                              Navigator.pop(context);
-                            } else if (!success && context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Failed to save card'),
-                                ),
-                              );
-                            }
-                          } catch (e, stackTrace) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Error: $e'),
-                                duration: const Duration(seconds: 5),
-                              ),
-                            );
-                            debugPrint('Error saving card: $e');
-                            debugPrint('Stack trace: $stackTrace');
-                          }
-                        },
+                            : null,
                         child: const Text('SAVE SOURCE'),
                       ),
                     ),
