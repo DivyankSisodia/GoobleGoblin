@@ -10,6 +10,7 @@ class CategoryChip extends StatelessWidget {
   final bool isSVG;
   final bool isSelected;
   final VoidCallback onTap;
+  final String? customSvg; // Inline SVG markup
 
   const CategoryChip({
     super.key,
@@ -18,11 +19,13 @@ class CategoryChip extends StatelessWidget {
     required this.isSVG,
     required this.isSelected,
     required this.onTap,
+    this.customSvg,
   });
 
   @override
   Widget build(BuildContext context) {
-    final hasIcon = iconPath.trim().isNotEmpty;
+    final hasCustomSvg = customSvg != null && customSvg!.trim().isNotEmpty;
+    final hasAssetIcon = iconPath.trim().isNotEmpty;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -37,7 +40,9 @@ class CategoryChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (hasIcon)
+            if (hasCustomSvg)
+              SvgPicture.string(customSvg!, height: 30, width: 30)
+            else if (hasAssetIcon)
               isSVG
                   ? SvgPicture.asset(iconPath, height: 30, width: 30)
                   : Image.asset(iconPath, height: 30, width: 30)

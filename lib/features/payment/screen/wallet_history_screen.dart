@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -669,6 +670,11 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
   Widget _buildTransactionTile(Payment payment, BankCard? card) {
     final cat = payment.category;
     final categoryColor = PredefinedCategories.getColor(cat?.icon);
+    final isIncome = payment.isIncome;
+
+    // Income: green, Expense: white/red based
+    final amountColor = isIncome ? AppColors.successGreen : Colors.white;
+    final amountPrefix = isIncome ? '+ ' : '';
 
     // Build the payment source label and icon
     final (sourceIcon, sourceLabel, sourceColor) = card == null
@@ -730,9 +736,7 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
                 borderRadius: BorderRadius.circular(16),
               ),
               padding: const EdgeInsets.all(12),
-              child: cat?.assetPath != null
-                  ? Image.asset(cat!.assetPath!)
-                  : Icon(Icons.payment, color: categoryColor, size: 24),
+              child: _buildCategoryIcon(cat, categoryColor),
             ),
             const Gap(16),
             Expanded(
@@ -788,13 +792,33 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  CurrencyUtils.format(payment.amount),
+                  '$amountPrefix${CurrencyUtils.format(payment.amount)}',
                   style: GoogleFonts.montserrat(
-                    color: Colors.white,
+                    color: amountColor,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+                if (isIncome)
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.successGreen.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'INCOME',
+                      style: GoogleFonts.montserrat(
+                        color: AppColors.successGreen,
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                 if (payment.isRecurring)
                   Container(
                     margin: const EdgeInsets.only(top: 4),
@@ -821,6 +845,27 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildCategoryIcon(Category? cat, Color fallbackColor) {
+    if (cat == null) {
+      return Icon(Icons.payment, color: fallbackColor, size: 24);
+    }
+    final assetPath = cat.assetPath;
+    // Custom inline SVG takes priority
+    if (cat.hasCustomSvg) {
+      return SvgPicture.string(cat.customSvg!, width: 28, height: 28);
+    }
+    // Asset path with SVG extension
+    if (assetPath != null && assetPath.toLowerCase().endsWith('.svg')) {
+      return SvgPicture.asset(assetPath, width: 28, height: 28);
+    }
+    // Asset path (PNG / raster)
+    if (assetPath != null) {
+      return Image.asset(assetPath, width: 28, height: 28);
+    }
+    // Fallback icon
+    return Icon(Icons.payment, color: fallbackColor, size: 24);
   }
 
   void _confirmDeletePayment(Payment payment) {

@@ -88,9 +88,18 @@ class PaymentsState {
     return result;
   }
 
-  /// Get recurring payments
-  List<Payment> get recurringPayments =>
-      payments.where((p) => p.isRecurring).toList();
+  /// Get recurring payments (only today or future-dated, exclude income)
+  List<Payment> get recurringPayments {
+    final today = AppDateUtils.today;
+    return payments.where((p) {
+      if (!p.isRecurring) return false;
+      if (p.isIncome) return false;
+      final date = AppDateUtils.parseIso(p.date);
+      if (date == null) return false;
+      // Include payments from today onward
+      return !date.isBefore(today);
+    }).toList();
+  }
 
   /// Get payments grouped by date (keyed as yyyy-MM-dd ISO strings for reliable parsing)
   Map<String, List<Payment>> get paymentsByDate {
@@ -106,13 +115,13 @@ class PaymentsState {
     return grouped;
   }
 
-  /// Get recurring payments grouped by date (keyed as yyyy-MM-dd ISO strings)
+  /// Get recurring payments grouped by date (keyed as yyyy-MM-dd ISO strings; only today or future)
   Map<String, List<Payment>> get recurringPaymentsByDate {
     final grouped = <String, List<Payment>>{};
-    final recurring = payments.where((p) => p.isRecurring);
-    for (final payment in recurring) {
+    final today = AppDateUtils.today;
+    for (final payment in recurringPayments) {
       final date = AppDateUtils.parseIso(payment.date);
-      if (date != null) {
+      if (date != null && !date.isBefore(today)) {
         final dateKey = AppDateUtils.formatIso(date);
         grouped.putIfAbsent(dateKey, () => []).add(payment);
       }

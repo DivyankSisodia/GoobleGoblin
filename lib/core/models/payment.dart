@@ -18,6 +18,9 @@ class Payment {
   // Controls whether this transaction deducts from card balance
   final bool isExternalTransaction;
 
+  // Whether this is incoming money (credit) vs expense (debit)
+  final bool isIncome;
+
   // Sync fields
   final String? uuid;
   final String? cardUuid;
@@ -43,6 +46,7 @@ class Payment {
     this.cardUuid,
     this.categoryUuid,
     this.isExternalTransaction = false,
+    this.isIncome = false,
     this.syncStatus = SyncStatus.pendingCreate,
     this.lastSyncedAt,
     this.isDeleted = false,
@@ -63,6 +67,7 @@ class Payment {
     'cardUuid': cardUuid,
     'categoryUuid': categoryUuid,
     'isExternalTransaction': isExternalTransaction ? 1 : 0,
+    'isIncome': isIncome ? 1 : 0,
     'syncStatus': syncStatus.dbValue,
     'lastSyncedAt': lastSyncedAt,
     'isDeleted': isDeleted ? 1 : 0,
@@ -85,12 +90,15 @@ class Payment {
     syncStatus: SyncStatus.fromString(map['syncStatus']),
     lastSyncedAt: map['lastSyncedAt'],
     isExternalTransaction: (map['isExternalTransaction'] ?? 0) == 1,
+    isIncome: (map['isIncome'] ?? 0) == 1,
     isDeleted: (map['isDeleted'] ?? 0) == 1,
     category: map['category_label'] != null
         ? Category(
             id: map['categoryId'],
             label: map['category_label'],
-            icon: map['category_icon'],
+            icon: map['category_icon'] ?? '',
+            assetPath: map['category_asset'],
+            customSvg: map['category_customSvg'],
           )
         : null,
   );
@@ -110,7 +118,55 @@ Payment(
   note: $note,
   createdAt: $createdAt,
   category: $category,
+  isIncome: $isIncome,
 )
 ''';
+  }
+
+  Payment copyWith({
+    int? id,
+    double? amount,
+    String? date,
+    int? cardId,
+    int? categoryId,
+    bool? isRecurring,
+    String? frequency,
+    bool? reminderNotification,
+    String? note,
+    String? createdAt,
+    String? updatedAt,
+    Category? category,
+    bool? isExternalTransaction,
+    bool? isIncome,
+    String? uuid,
+    String? cardUuid,
+    String? categoryUuid,
+    SyncStatus? syncStatus,
+    String? lastSyncedAt,
+    bool? isDeleted,
+  }) {
+    return Payment(
+      id: id ?? this.id,
+      amount: amount ?? this.amount,
+      date: date ?? this.date,
+      cardId: cardId ?? this.cardId,
+      categoryId: categoryId ?? this.categoryId,
+      isRecurring: isRecurring ?? this.isRecurring,
+      frequency: frequency ?? this.frequency,
+      reminderNotification: reminderNotification ?? this.reminderNotification,
+      note: note ?? this.note,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      category: category ?? this.category,
+      isExternalTransaction:
+          isExternalTransaction ?? this.isExternalTransaction,
+      isIncome: isIncome ?? this.isIncome,
+      uuid: uuid ?? this.uuid,
+      cardUuid: cardUuid ?? this.cardUuid,
+      categoryUuid: categoryUuid ?? this.categoryUuid,
+      syncStatus: syncStatus ?? this.syncStatus,
+      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+      isDeleted: isDeleted ?? this.isDeleted,
+    );
   }
 }

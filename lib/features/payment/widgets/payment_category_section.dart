@@ -37,9 +37,10 @@ class PaymentCategorySection extends StatelessWidget {
                   (cat) => CategoryChip(
                     iconPath: cat.assetPath ?? '',
                     label: cat.label,
-                    isSVG: false,
+                    isSVG: cat.usesSvgIcon,
                     isSelected: selectedCategoryId == cat.id,
                     onTap: () => onCategorySelected(cat.id),
+                    customSvg: cat.customSvg,
                   ),
                 ),
                 _AddCategoryActionChip(onTap: onAddCategory),

@@ -118,9 +118,9 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
 
     if (category == null) return;
 
-    final success = await ref.read(categoriesProvider.notifier).addCategory(
-      category,
-    );
+    final success = await ref
+        .read(categoriesProvider.notifier)
+        .addCategory(category);
 
     if (!mounted) return;
 

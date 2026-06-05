@@ -43,7 +43,7 @@ class _AmountInputState extends State<AmountInput> {
         children: [
           /// Currency symbol
           Text(
-            "\$",
+            "₹",
             style: TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.bold,
@@ -58,11 +58,11 @@ class _AmountInputState extends State<AmountInput> {
           Expanded(
             child: TextField(
               controller: _controller,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               inputFormatters: [
-                FilteringTextInputFormatter.allow(
-                  RegExp(r'^\d*\.?\d{0,2}'),
-                ),
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
               ],
               style: const TextStyle(
                 fontSize: 36,
@@ -72,14 +72,13 @@ class _AmountInputState extends State<AmountInput> {
               cursorColor: AppColors.primaryNeon,
               cursorWidth: 3.0,
               cursorHeight: 34,
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-              ),
+              decoration: const InputDecoration(border: InputBorder.none),
               onChanged: (value) {
                 if (!value.contains('.') && value.isNotEmpty) {
                   _controller.text = "$value.00";
-                  _controller.selection =
-                      TextSelection.collapsed(offset: value.length);
+                  _controller.selection = TextSelection.collapsed(
+                    offset: value.length,
+                  );
                 }
               },
             ),

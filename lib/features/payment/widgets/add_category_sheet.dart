@@ -6,6 +6,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/models/category.dart';
 import '../../../core/theme/app_theme.dart';
 
+/// Tab for choosing icon source in the add-category sheet.
+enum _IconSource { template, customSvg }
+
 class AddCategorySheet extends StatefulWidget {
   const AddCategorySheet({super.key, required this.existingCategories});
 
@@ -17,12 +20,15 @@ class AddCategorySheet extends StatefulWidget {
 
 class _AddCategorySheetState extends State<AddCategorySheet> {
   final TextEditingController _nameController = TextEditingController();
-  String _selectedIcon = PredefinedCategories.all.first.icon;
+  final TextEditingController _svgController = TextEditingController();
+  String _selectedTemplateIcon = PredefinedCategories.all.first.icon;
+  _IconSource _iconSource = _IconSource.template;
   String? _errorText;
 
   @override
   void dispose() {
     _nameController.dispose();
+    _svgController.dispose();
     super.dispose();
   }
 
@@ -43,26 +49,51 @@ class _AddCategorySheetState extends State<AddCategorySheet> {
       return;
     }
 
-    if (PredefinedCategories.isSystemManagedLabel(label)) {
-      setState(() {
-        _errorText =
-            'Use that brand in the note field instead. Keep categories broader.';
-      });
-      return;
+    // Build the category based on the chosen icon source
+    if (_iconSource == _IconSource.customSvg) {
+      final svg = _svgController.text.trim();
+      if (svg.isEmpty) {
+        setState(
+          () => _errorText = 'Please paste SVG code or switch to a template',
+        );
+        return;
+      }
+      if (!svg.toLowerCase().contains('<svg')) {
+        setState(() => _errorText = 'The text does not look like valid SVG');
+        return;
+      }
+      // Restrict SVG size — keep under ~5 KB for performance
+      if (svg.length > 5000) {
+        setState(() {
+          _errorText =
+              'SVG is too large (${svg.length} chars). Keep it under 5,000 characters for best performance.';
+        });
+        return;
+      }
+
+      Navigator.of(context).pop(
+        Category(
+          label: label,
+          icon: 'custom_svg',
+          customSvg: svg,
+          isPredefined: false,
+        ),
+      );
+    } else {
+      // Template source
+      final selectedTemplate =
+          PredefinedCategories.getByIcon(_selectedTemplateIcon) ??
+          PredefinedCategories.all.first;
+
+      Navigator.of(context).pop(
+        Category(
+          label: label,
+          icon: selectedTemplate.icon,
+          assetPath: selectedTemplate.assetPath,
+          isPredefined: false,
+        ),
+      );
     }
-
-    final selectedTemplate =
-        PredefinedCategories.getByIcon(_selectedIcon) ??
-        PredefinedCategories.all.first;
-
-    Navigator.of(context).pop(
-      Category(
-        label: label,
-        icon: selectedTemplate.icon,
-        assetPath: selectedTemplate.assetPath,
-        isPredefined: false,
-      ),
-    );
   }
 
   String _formatLabel(String value) {
@@ -80,7 +111,10 @@ class _AddCategorySheetState extends State<AddCategorySheet> {
 
   @override
   Widget build(BuildContext context) {
-    final canSave = _nameController.text.trim().isNotEmpty;
+    final canSave =
+        _nameController.text.trim().isNotEmpty &&
+        (_iconSource == _IconSource.template ||
+            _svgController.text.trim().isNotEmpty);
 
     return Container(
       padding: EdgeInsets.only(
@@ -98,6 +132,7 @@ class _AddCategorySheetState extends State<AddCategorySheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Drag handle
             Center(
               child: Container(
                 width: 42,
@@ -126,6 +161,7 @@ class _AddCategorySheetState extends State<AddCategorySheet> {
               ),
             ),
             const Gap(20),
+            // --- Name field ---
             CupertinoTextField(
               controller: _nameController,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
@@ -155,71 +191,44 @@ class _AddCategorySheetState extends State<AddCategorySheet> {
               ),
             ],
             const Gap(20),
+            // --- Icon source picker ---
             Text(
-              'Pick a visual style',
+              'Icon source',
               style: GoogleFonts.montserrat(
                 color: Colors.white,
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
               ),
             ),
-            const Gap(14),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: PredefinedCategories.all
-                  .map(
-                    (template) => GestureDetector(
-                      onTap: () => setState(() => _selectedIcon = template.icon),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _selectedIcon == template.icon
-                              ? AppColors.primaryNeonDark
-                              : AppColors.surfaceLight.withValues(alpha: 0.45),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: _selectedIcon == template.icon
-                                ? Colors.white
-                                : Colors.white.withValues(alpha: 0.05),
-                            width: _selectedIcon == template.icon ? 1.6 : 1,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (template.assetPath != null)
-                              Image.asset(
-                                template.assetPath!,
-                                height: 24,
-                                width: 24,
-                              )
-                            else
-                              const Icon(
-                                Icons.category_rounded,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            const Gap(8),
-                            Text(
-                              template.label,
-                              style: GoogleFonts.montserrat(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(),
+            const Gap(12),
+            // Segmented toggle
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.surfaceLight.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              padding: const EdgeInsets.all(4),
+              child: Row(
+                children: [
+                  _buildSourceToggle(
+                    label: 'Template',
+                    value: _IconSource.template,
+                  ),
+                  _buildSourceToggle(
+                    label: 'Custom SVG',
+                    value: _IconSource.customSvg,
+                  ),
+                ],
+              ),
             ),
+            const Gap(14),
+
+            // --- Content based on source ---
+            if (_iconSource == _IconSource.template)
+              _buildTemplatePicker()
+            else
+              _buildCustomSvgInput(),
+
             const Gap(24),
             SizedBox(
               width: double.infinity,
@@ -232,6 +241,148 @@ class _AddCategorySheetState extends State<AddCategorySheet> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSourceToggle({
+    required String label,
+    required _IconSource value,
+  }) {
+    final isSelected = _iconSource == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _iconSource = value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primaryNeonDark : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: GoogleFonts.montserrat(
+              color: isSelected ? Colors.white : Colors.white54,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTemplatePicker() {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: PredefinedCategories.all
+          .map(
+            (template) => GestureDetector(
+              onTap: () =>
+                  setState(() => _selectedTemplateIcon = template.icon),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: _selectedTemplateIcon == template.icon
+                      ? AppColors.primaryNeonDark
+                      : AppColors.surfaceLight.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: _selectedTemplateIcon == template.icon
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: 0.05),
+                    width: _selectedTemplateIcon == template.icon ? 1.6 : 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (template.assetPath != null)
+                      Image.asset(template.assetPath!, height: 24, width: 24)
+                    else
+                      const Icon(
+                        Icons.category_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    const Gap(8),
+                    Text(
+                      template.label,
+                      style: GoogleFonts.montserrat(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildCustomSvgInput() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Paste your SVG markup below',
+          style: GoogleFonts.montserrat(
+            color: AppColors.textSecondary,
+            fontSize: 12,
+          ),
+        ),
+        const Gap(10),
+        CupertinoTextField(
+          controller: _svgController,
+          maxLines: 6,
+          minLines: 4,
+          padding: const EdgeInsets.all(16),
+          placeholder:
+              '<svg xmlns="http://www.w3.org/2000/svg" ...>\n  ...\n</svg>',
+          onChanged: (_) => setState(() => _errorText = null),
+          style: GoogleFonts.montserrat(color: Colors.white, fontSize: 12),
+          placeholderStyle: GoogleFonts.montserrat(
+            color: Colors.white24,
+            fontSize: 12,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceLight.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+        ),
+        const Gap(8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Tip: Keep SVG under ~5 KB. Use viewBox for scaling.',
+              style: GoogleFonts.montserrat(
+                color: Colors.white24,
+                fontSize: 10,
+              ),
+            ),
+            Text(
+              '${_svgController.text.length} / 5,000',
+              style: GoogleFonts.montserrat(
+                color: _svgController.text.length > 5000
+                    ? AppColors.errorRed
+                    : Colors.white24,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

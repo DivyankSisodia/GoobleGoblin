@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:toastification/toastification.dart';
 
@@ -33,6 +34,13 @@ class GoobleGoblinApp extends ConsumerWidget {
         title: 'GoobleGoblin',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.darkTheme,
+        locale: const Locale('en', 'IN'),
+        supportedLocales: const [Locale('en', 'IN')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
         home: const _AppRouter(),
       ),
     );

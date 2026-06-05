@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/models/payment.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_utils.dart';
-import '../../../core/utils/date_utils.dart';
 import '../../../core/models/category.dart';
 import '../../payment/screen/new_payment_screen.dart';
 
@@ -18,7 +18,25 @@ class UpcomingPaymentWidget extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Determine category accent color
     final categoryColor = PredefinedCategories.getColor(payment.category?.icon);
-    final assetPath = payment.category?.assetPath;
+    final category = payment.category;
+    final assetPath = category?.assetPath;
+    final customSvg = category?.customSvg;
+    final hasCustomSvg = customSvg != null && customSvg.trim().isNotEmpty;
+    final isSvgAsset =
+        assetPath != null && assetPath.toLowerCase().endsWith('.svg');
+
+    Widget buildIcon() {
+      if (hasCustomSvg) {
+        return SvgPicture.string(customSvg, width: 30, height: 30);
+      }
+      if (assetPath != null) {
+        if (isSvgAsset) {
+          return SvgPicture.asset(assetPath, width: 30, height: 30);
+        }
+        return Image.asset(assetPath, width: 30, height: 30);
+      }
+      return Icon(Icons.payments_outlined, color: categoryColor, size: 24);
+    }
 
     return InkWell(
       onTap: () {
@@ -57,13 +75,7 @@ class UpcomingPaymentWidget extends ConsumerWidget {
                 color: AppColors.background,
                 borderRadius: BorderRadius.circular(18),
               ),
-              child: assetPath != null
-                  ? Image.asset(assetPath)
-                  : Icon(
-                      Icons.payments_outlined,
-                      color: categoryColor,
-                      size: 24,
-                    ),
+              child: buildIcon(),
             ),
             const Gap(12),
             // Info
@@ -72,7 +84,9 @@ class UpcomingPaymentWidget extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  payment.category?.label ?? 'Other Payment',
+                  payment.note?.isNotEmpty == true ? payment.note! : 'No Note',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.montserrat(
                     color: Colors.white,
                     fontSize: 15,
@@ -80,7 +94,7 @@ class UpcomingPaymentWidget extends ConsumerWidget {
                   ),
                 ),
                 Text(
-                  'Due ${AppDateUtils.formatDisplay(AppDateUtils.parseIso(payment.date) ?? DateTime.now())}',
+                  payment.category?.label ?? 'Other Payment',
                   style: GoogleFonts.montserrat(
                     color: Colors.white70,
                     fontSize: 11,

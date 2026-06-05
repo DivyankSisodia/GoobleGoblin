@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
 import '../core/models/card.dart';
+import '../core/models/payment.dart';
 import '../core/theme/app_theme.dart';
 import '../core/utils/currency_utils.dart';
 import '../features/cards/widget/card_preview_widget.dart';
@@ -644,6 +646,8 @@ class AppBottomSheet {
   static void showAddMoneyBottomSheet(BuildContext context, WidgetRef ref) {
     BankCard? selectedCard;
     final TextEditingController amountController = TextEditingController();
+    final TextEditingController noteController = TextEditingController();
+    DateTime selectedDate = DateTime.now();
 
     showModalBottomSheet(
       context: context,
@@ -658,9 +662,6 @@ class AppBottomSheet {
                 final cards = cardsState.cards;
 
                 return Container(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.9,
-                  ),
                   padding: EdgeInsets.only(
                     left: 24,
                     right: 24,
@@ -673,224 +674,391 @@ class AppBottomSheet {
                       top: Radius.circular(32),
                     ),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(2),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
-                      ),
-                      const Gap(24),
-                      Text(
-                        selectedCard == null
-                            ? 'Add Money'
-                            : 'Add Money to ${selectedCard!.bankName}',
-                        style: GoogleFonts.montserrat(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Gap(24),
-                      if (selectedCard == null) ...[
+                        const Gap(24),
                         Text(
-                          'Select a card to add money to',
+                          selectedCard == null
+                              ? 'Add Money'
+                              : 'Add Money to ${selectedCard!.bankName}',
                           style: GoogleFonts.montserrat(
-                            color: AppColors.textSecondary,
-                            fontSize: 14,
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const Gap(16),
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxHeight: MediaQuery.of(context).size.height * 0.3,
+                        const Gap(24),
+                        if (selectedCard == null) ...[
+                          Text(
+                            'Select a card to add money to',
+                            style: GoogleFonts.montserrat(
+                              color: AppColors.textSecondary,
+                              fontSize: 14,
+                            ),
                           ),
-                          child: cards.isEmpty
-                              ? const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 32),
-                                  child: Text('No cards available'),
-                                )
-                              : ListView.separated(
-                                  shrinkWrap: true,
-                                  itemCount: cards.length,
-                                  separatorBuilder: (_, __) => const Gap(8),
-                                  itemBuilder: (context, index) {
-                                    final card = cards[index];
-                                    return GestureDetector(
-                                      onTap: () =>
-                                          setState(() => selectedCard = card),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(16),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.05,
+                          const Gap(16),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight:
+                                  MediaQuery.of(context).size.height * 0.3,
+                            ),
+                            child: cards.isEmpty
+                                ? const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 32),
+                                    child: Text('No cards available'),
+                                  )
+                                : ListView.separated(
+                                    shrinkWrap: true,
+                                    itemCount: cards.length,
+                                    separatorBuilder: (_, __) => const Gap(8),
+                                    itemBuilder: (context, index) {
+                                      final card = cards[index];
+                                      return GestureDetector(
+                                        onTap: () =>
+                                            setState(() => selectedCard = card),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.05,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            border: Border.all(
+                                              color: Colors.white10,
+                                            ),
                                           ),
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                          border: Border.all(
-                                            color: Colors.white10,
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.all(
+                                                  10,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.primaryNeon
+                                                      .withValues(alpha: 0.1),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(
+                                                  card.isCredit
+                                                      ? Icons.credit_card
+                                                      : Icons
+                                                            .account_balance_wallet,
+                                                  color: AppColors.primaryNeon,
+                                                  size: 20,
+                                                ),
+                                              ),
+                                              const Gap(16),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      card.bankName,
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      'Current: ${CurrencyUtils.format(card.balance)}',
+                                                      style: TextStyle(
+                                                        color: Colors.white
+                                                            .withValues(
+                                                              alpha: 0.5,
+                                                            ),
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const Icon(
+                                                Icons.chevron_right,
+                                                color: Colors.white24,
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.all(10),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.primaryNeon
-                                                    .withValues(alpha: 0.1),
-                                                shape: BoxShape.circle,
-                                              ),
-                                              child: Icon(
-                                                card.isCredit
-                                                    ? Icons.credit_card
-                                                    : Icons
-                                                          .account_balance_wallet,
-                                                color: AppColors.primaryNeon,
-                                                size: 20,
+                                      );
+                                    },
+                                  ),
+                          ),
+                        ] else ...[
+                          CardPreviewWidget(
+                            bankName: selectedCard!.bankName,
+                            balance:
+                                (selectedCard!.balance +
+                                        (double.tryParse(
+                                              amountController.text,
+                                            ) ??
+                                            0.0))
+                                    .toStringAsFixed(2),
+                            isCredit: selectedCard!.isCredit,
+                          ),
+                          const Gap(24),
+                          _buildField(
+                            controller: amountController,
+                            hint: 'Amount to add',
+                            icon: Icons.currency_rupee_rounded,
+                            keyboardType: TextInputType.number,
+                            onChanged: (val) => setState(() {}),
+                          ),
+                          const Gap(16),
+                          _buildField(
+                            controller: noteController,
+                            hint: 'Who sent this? (e.g. Dad, Salary)',
+                            icon: Icons.person_outline,
+                            onChanged: (val) => setState(() {}),
+                          ),
+                          const Gap(16),
+                          // --- Date picker ---
+                          GestureDetector(
+                            onTap: () async {
+                              final picked =
+                                  await showCupertinoModalPopup<DateTime>(
+                                    context: context,
+                                    builder: (_) => Container(
+                                      height: 280,
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF1A0E24),
+                                        borderRadius: BorderRadius.vertical(
+                                          top: Radius.circular(20),
+                                        ),
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              border: Border(
+                                                bottom: BorderSide(
+                                                  color: Colors.white
+                                                      .withOpacity(0.1),
+                                                ),
                                               ),
                                             ),
-                                            const Gap(16),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    card.bankName,
-                                                    style: const TextStyle(
+                                            child: Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
+                                              children: [
+                                                const Padding(
+                                                  padding: EdgeInsets.only(
+                                                    left: 20,
+                                                  ),
+                                                  child: Text(
+                                                    'Select Date',
+                                                    style: TextStyle(
                                                       color: Colors.white,
                                                       fontSize: 16,
+                                                      decoration:
+                                                          TextDecoration.none,
+                                                    ),
+                                                  ),
+                                                ),
+                                                CupertinoButton(
+                                                  child: const Text(
+                                                    'Done',
+                                                    style: TextStyle(
                                                       fontWeight:
                                                           FontWeight.bold,
                                                     ),
                                                   ),
-                                                  Text(
-                                                    'Current: ${CurrencyUtils.format(card.balance)}',
-                                                    style: TextStyle(
-                                                      color: Colors.white
-                                                          .withValues(
-                                                            alpha: 0.5,
-                                                          ),
-                                                      fontSize: 14,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                        context,
+                                                        selectedDate,
+                                                      ),
+                                                ),
+                                              ],
                                             ),
-                                            const Icon(
-                                              Icons.chevron_right,
-                                              color: Colors.white24,
+                                          ),
+                                          Expanded(
+                                            child: CupertinoDatePicker(
+                                              mode:
+                                                  CupertinoDatePickerMode.date,
+                                              initialDateTime: selectedDate,
+                                              maximumDate: DateTime.now(),
+                                              onDateTimeChanged: (d) {
+                                                selectedDate = d;
+                                              },
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                        ],
                                       ),
-                                    );
-                                  },
+                                    ),
+                                  );
+                              if (picked != null) {
+                                setState(() => selectedDate = picked);
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.1),
                                 ),
-                        ),
-                      ] else ...[
-                        CardPreviewWidget(
-                          bankName: selectedCard!.bankName,
-                          balance:
-                              (selectedCard!.balance +
-                                      (double.tryParse(amountController.text) ??
-                                          0.0))
-                                  .toStringAsFixed(2),
-                          isCredit: selectedCard!.isCredit,
-                        ),
-                        const Gap(24),
-                        _buildField(
-                          controller: amountController,
-                          hint: 'Amount to add',
-                          icon: Icons.currency_rupee_rounded,
-                          keyboardType: TextInputType.number,
-                          onChanged: (val) => setState(() {}),
-                        ),
-                        const Gap(32),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () =>
-                                    setState(() => selectedCard = null),
-                                child: const Text('BACK'),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.calendar_today_rounded,
+                                    color: AppColors.primaryNeon,
+                                    size: 18,
+                                  ),
+                                  const Gap(12),
+                                  Text(
+                                    DateFormat(
+                                      'MMM d, yyyy',
+                                    ).format(selectedDate),
+                                    style: GoogleFonts.montserrat(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    'Change',
+                                    style: GoogleFonts.montserrat(
+                                      color: AppColors.primaryNeon,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const Gap(16),
-                            Expanded(
-                              flex: 2,
-                              child: ElevatedButton(
-                                onPressed: () async {
-                                  final amount =
-                                      double.tryParse(
-                                        amountController.text.trim(),
-                                      ) ??
-                                      0.0;
-                                  if (amount <= 0) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Please enter a valid amount',
-                                        ),
-                                      ),
-                                    );
-                                    return;
-                                  }
-
-                                  try {
-                                    final updatedCard = selectedCard!.copyWith(
-                                      balance: selectedCard!.balance + amount,
-                                    );
-
-                                    final success = await ref
-                                        .read(cardsProvider.notifier)
-                                        .updateCard(updatedCard);
-
-                                    if (success && context.mounted) {
-                                      Navigator.pop(context);
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            'Added ${CurrencyUtils.format(amount)} to ${selectedCard!.bankName}',
-                                          ),
-                                        ),
-                                      );
-                                    } else if (context.mounted) {
+                          ),
+                          const Gap(32),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () =>
+                                      setState(() => selectedCard = null),
+                                  child: const Text('BACK'),
+                                ),
+                              ),
+                              const Gap(16),
+                              Expanded(
+                                flex: 2,
+                                child: ElevatedButton(
+                                  onPressed: () async {
+                                    final amount =
+                                        double.tryParse(
+                                          amountController.text.trim(),
+                                        ) ??
+                                        0.0;
+                                    if (amount <= 0) {
                                       ScaffoldMessenger.of(
                                         context,
                                       ).showSnackBar(
                                         const SnackBar(
-                                          content: Text('Failed to add money'),
+                                          content: Text(
+                                            'Please enter a valid amount',
+                                          ),
                                         ),
                                       );
+                                      return;
                                     }
-                                  } catch (e) {
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text('Error: $e'),
-                                          duration: const Duration(seconds: 5),
-                                        ),
+
+                                    try {
+                                      // Find or create the "Income" category
+                                      final categories = ref
+                                          .read(categoriesProvider)
+                                          .categories;
+                                      final incomeCat = categories.firstWhere(
+                                        (c) => c.label == 'Income',
+                                        orElse: () => categories.first,
                                       );
+
+                                      // Create an income payment record
+                                      final incomePayment = Payment(
+                                        amount: amount,
+                                        date: DateFormat(
+                                          'yyyy-MM-dd',
+                                        ).format(selectedDate),
+                                        cardId: selectedCard!.id!,
+                                        categoryId: incomeCat.id!,
+                                        isRecurring: false,
+                                        reminderNotification: false,
+                                        isExternalTransaction: false,
+                                        isIncome: true,
+                                        note:
+                                            noteController.text
+                                                .trim()
+                                                .isNotEmpty
+                                            ? noteController.text.trim()
+                                            : null,
+                                      );
+
+                                      final success = await ref
+                                          .read(paymentsProvider.notifier)
+                                          .addPayment(incomePayment);
+
+                                      if (success && context.mounted) {
+                                        Navigator.pop(context);
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Added ${CurrencyUtils.format(amount)} to ${selectedCard!.bankName}',
+                                            ),
+                                          ),
+                                        );
+                                      } else if (context.mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Failed to add money',
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Error: $e'),
+                                            duration: const Duration(
+                                              seconds: 5,
+                                            ),
+                                          ),
+                                        );
+                                      }
                                     }
-                                  }
-                                },
-                                child: const Text('ADD MONEY'),
+                                  },
+                                  child: const Text('ADD MONEY'),
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 );
               },

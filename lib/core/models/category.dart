@@ -7,8 +7,9 @@ import 'card.dart' show SyncStatus;
 class Category {
   final int? id;
   final String label;
-  final String icon; // Icon name (legacy)
+  final String icon; // Icon name (legacy / template identifier)
   final String? assetPath; // Path to image asset
+  final String? customSvg; // Inline SVG markup for custom icon
   final bool isPredefined;
   final Color? color; // Optional color for the category
 
@@ -23,6 +24,7 @@ class Category {
     required this.label,
     required this.icon,
     this.assetPath,
+    this.customSvg,
     this.isPredefined = true,
     this.color,
     this.uuid,
@@ -36,6 +38,7 @@ class Category {
     'label': label,
     'icon': icon,
     'assetPath': assetPath,
+    'customSvg': customSvg,
     'isPredefined': isPredefined ? 1 : 0,
     'uuid': uuid,
     'syncStatus': syncStatus.dbValue,
@@ -48,6 +51,7 @@ class Category {
     label: map['label'] ?? '',
     icon: map['icon'] ?? '',
     assetPath: map['assetPath'],
+    customSvg: map['customSvg'],
     isPredefined: (map['isPredefined'] ?? 1) == 1,
     uuid: map['uuid'],
     syncStatus: SyncStatus.fromString(map['syncStatus']),
@@ -60,6 +64,7 @@ class Category {
     String? label,
     String? icon,
     String? assetPath,
+    String? customSvg,
     bool? isPredefined,
     Color? color,
     String? uuid,
@@ -72,6 +77,7 @@ class Category {
       label: label ?? this.label,
       icon: icon ?? this.icon,
       assetPath: assetPath ?? this.assetPath,
+      customSvg: customSvg ?? this.customSvg,
       isPredefined: isPredefined ?? this.isPredefined,
       color: color ?? this.color,
       uuid: uuid ?? this.uuid,
@@ -88,6 +94,13 @@ class Category {
 
   /// Check if category has an image asset
   bool get hasAsset => assetPath != null && assetPath!.isNotEmpty;
+
+  /// Check if category has custom inline SVG
+  bool get hasCustomSvg => customSvg != null && customSvg!.trim().isNotEmpty;
+
+  /// Whether this category uses SVG (either inline or asset)
+  bool get usesSvgIcon =>
+      hasCustomSvg || (hasAsset && assetPath!.toLowerCase().endsWith('.svg'));
 }
 
 /// Predefined categories with image assets
@@ -132,6 +145,7 @@ class PredefinedCategories {
       assetPath: AppImages.foodDining,
       color: Color(0xFFFF6B6B),
     ),
+    Category(label: 'Income', icon: 'income', color: Color(0xFF4CAF50)),
   ];
 
   static const Map<String, String> legacyLabelRemap = {
@@ -257,12 +271,6 @@ class PredefinedCategories {
     }
 
     return legacyLabelRemap[normalized];
-  }
-
-  static bool isReservedNoteKeywordLabel(String? label) {
-    final normalized = (label ?? '').trim().toLowerCase();
-    if (normalized.isEmpty) return false;
-    return legacyLabelRemap.containsKey(normalized);
   }
 
   static bool isSystemManagedLabel(String? label) {

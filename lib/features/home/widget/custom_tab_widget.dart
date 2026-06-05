@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -78,23 +79,35 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: payments.length > 10
-          ? 10
-          : payments.length, // Show only recent 10
+      itemCount: payments.length > 10 ? 10 : payments.length,
       separatorBuilder: (_, __) => const Gap(12),
       itemBuilder: (_, index) {
         final payment = payments[index];
         final category = payment.category;
+        final isIncome = payment.isIncome;
+
+        final title = payment.note?.isNotEmpty == true
+            ? payment.note!
+            : (category?.label ?? 'Other');
+        final subtitle = isIncome
+            ? 'Income · ${category?.label ?? 'Received'}'
+            : (payment.note?.isNotEmpty == true
+                  ? category?.label ?? 'Payment'
+                  : 'Payment');
+        final amountText = isIncome
+            ? '+ ${CurrencyUtils.format(payment.amount)}'
+            : CurrencyUtils.format(payment.amount);
+        final amountColor = isIncome ? AppColors.successGreen : Colors.white;
 
         return _itemTile(
-          title: category?.label ?? 'Other',
-          subtitle: payment.note?.isNotEmpty == true
-              ? payment.note!
-              : 'Payment',
-          amount: CurrencyUtils.format(payment.amount),
+          title: title,
+          subtitle: subtitle,
+          amount: amountText,
           highlight: false,
           iconPath: category?.assetPath,
           categoryIcon: category?.icon,
+          customSvg: category?.customSvg,
+          amountColor: amountColor,
         );
       },
     );
@@ -144,23 +157,14 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
   Widget _categoriesTab(List<Category> categories, List<Payment> payments) {
     if (categories.isEmpty) return _emptyState('No categories');
 
-    // Filter categories that have spending
-    final spentCategories = categories.where((cat) {
-      return payments.any((p) => p.categoryId == cat.id);
-    }).toList();
-
-    if (spentCategories.isEmpty) {
-      return _emptyState('No spending by category yet');
-    }
-
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: spentCategories.length,
+      itemCount: categories.length,
       separatorBuilder: (_, __) => const Gap(12),
       itemBuilder: (_, index) {
-        final category = spentCategories[index];
+        final category = categories[index];
         final relatedPayments = payments
             .where((p) => p.categoryId == category.id)
             .toList();
@@ -168,16 +172,278 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
           0,
           (sum, p) => sum + p.amount,
         );
+        final paymentCount = relatedPayments.length;
 
-        return _itemTile(
-          title: category.label,
-          subtitle: '${relatedPayments.length} transactions',
-          amount: CurrencyUtils.format(totalAmount),
-          highlight: false,
-          iconPath: category.assetPath,
-          categoryIcon: category.icon,
+        return GestureDetector(
+          onLongPress: () =>
+              _showDeleteCategorySheet(category, paymentCount, relatedPayments),
+          child: _itemTile(
+            title: category.label,
+            subtitle: paymentCount > 0
+                ? '$paymentCount transaction${paymentCount == 1 ? '' : 's'}'
+                : 'No transactions',
+            amount: paymentCount > 0 ? CurrencyUtils.format(totalAmount) : '',
+            highlight: false,
+            iconPath: category.assetPath,
+            categoryIcon: category.icon,
+            customSvg: category.customSvg,
+          ),
         );
       },
+    );
+  }
+
+  void _showDeleteCategorySheet(
+    Category category,
+    int paymentCount,
+    List<Payment> relatedPayments,
+  ) {
+    final isPredefined = category.isPredefined;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Gap(20),
+            Text(
+              category.label,
+              style: GoogleFonts.montserrat(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const Gap(8),
+            Text(
+              paymentCount > 0
+                  ? '$paymentCount transaction${paymentCount == 1 ? '' : 's'} linked'
+                  : 'No transactions linked',
+              style: GoogleFonts.montserrat(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+            const Gap(24),
+            if (isPredefined)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Text(
+                  'Built-in categories cannot be deleted.',
+                  style: GoogleFonts.montserrat(
+                    color: AppColors.warningYellow,
+                    fontSize: 13,
+                  ),
+                ),
+              )
+            else ...[
+              if (paymentCount > 0) ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _showReassignDialog(category, relatedPayments);
+                    },
+                    icon: const Icon(Icons.swap_horiz, size: 18),
+                    label: const Text('Move & Delete'),
+                  ),
+                ),
+                const Gap(12),
+              ],
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _confirmAndDelete(category, relatedPayments);
+                  },
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: Text(
+                    paymentCount > 0 ? 'Delete Anyway' : 'Delete Category',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.errorRed,
+                  ),
+                ),
+              ),
+            ],
+            const Gap(8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showReassignDialog(
+    Category fromCategory,
+    List<Payment> paymentsToMove,
+  ) {
+    final allCategories = ref
+        .read(categoriesProvider)
+        .categories
+        .where((c) => c.id != fromCategory.id)
+        .toList();
+
+    Category? targetCategory;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: Text(
+            'Move ${paymentsToMove.length} transaction${paymentsToMove.length == 1 ? '' : 's'}',
+            style: GoogleFonts.montserrat(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Move transactions from "${fromCategory.label}" to:',
+                style: GoogleFonts.montserrat(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                ),
+              ),
+              const Gap(16),
+              ...allCategories.map(
+                (cat) => RadioListTile<Category>(
+                  value: cat,
+                  groupValue: targetCategory,
+                  title: Text(
+                    cat.label,
+                    style: GoogleFonts.montserrat(color: Colors.white),
+                  ),
+                  activeColor: AppColors.primaryNeon,
+                  onChanged: (c) => setDialogState(() => targetCategory = c),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('CANCEL'),
+            ),
+            ElevatedButton(
+              onPressed: targetCategory == null
+                  ? null
+                  : () {
+                      Navigator.pop(ctx);
+                      _moveAndDelete(
+                        fromCategory,
+                        targetCategory!,
+                        paymentsToMove,
+                      );
+                    },
+              child: const Text('MOVE & DELETE'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _moveAndDelete(
+    Category from,
+    Category to,
+    List<Payment> payments,
+  ) async {
+    final paymentsNotifier = ref.read(paymentsProvider.notifier);
+
+    for (final payment in payments) {
+      final updated = payment.copyWith(
+        categoryId: to.id!,
+        categoryUuid: to.uuid,
+      );
+      await paymentsNotifier.updatePayment(updated);
+    }
+
+    await ref.read(categoriesProvider.notifier).deleteCategory(from.id!);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Moved ${payments.length} transaction${payments.length == 1 ? '' : 's'} to "${to.label}" & deleted "${from.label}"',
+          ),
+        ),
+      );
+    }
+  }
+
+  void _confirmAndDelete(Category category, List<Payment> relatedPayments) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          'Delete "${category.label}"?',
+          style: GoogleFonts.montserrat(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          relatedPayments.isNotEmpty
+              ? 'This will remove the category. ${relatedPayments.length} transaction${relatedPayments.length == 1 ? '' : 's'} will lose their category label.'
+              : 'This category has no transactions. It will be permanently removed.',
+          style: GoogleFonts.montserrat(
+            color: AppColors.textSecondary,
+            fontSize: 13,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ref
+                  .read(categoriesProvider.notifier)
+                  .deleteCategory(category.id!);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('"${category.label}" deleted')),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.errorRed,
+            ),
+            child: const Text('DELETE'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -190,10 +456,28 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
     required bool highlight,
     String? iconPath,
     String? categoryIcon,
+    String? customSvg,
     double? progress,
     Color? progressColor,
+    Color? amountColor,
   }) {
     final themeColor = PredefinedCategories.getColor(categoryIcon);
+    final hasCustomSvg = customSvg != null && customSvg.trim().isNotEmpty;
+    final isSvgAsset =
+        iconPath != null && iconPath.toLowerCase().endsWith('.svg');
+
+    Widget buildIcon() {
+      if (hasCustomSvg) {
+        return SvgPicture.string(customSvg, width: 28, height: 28);
+      }
+      if (iconPath != null) {
+        if (isSvgAsset) {
+          return SvgPicture.asset(iconPath, width: 28, height: 28);
+        }
+        return Image.asset(iconPath, width: 28, height: 28);
+      }
+      return Icon(Icons.payment, color: themeColor, size: 24);
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -218,13 +502,7 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
                   color: AppColors.background,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: iconPath != null
-                    ? Image.asset(iconPath)
-                    : Icon(
-                        Icons.category_outlined,
-                        color: themeColor,
-                        size: 20,
-                      ),
+                child: buildIcon(),
               ),
               const Gap(16),
               Expanded(
@@ -253,7 +531,9 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
               Text(
                 amount,
                 style: GoogleFonts.montserrat(
-                  color: highlight ? AppColors.primaryNeon : Colors.white,
+                  color:
+                      amountColor ??
+                      (highlight ? AppColors.primaryNeon : Colors.white),
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
@@ -300,18 +580,3 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
     );
   }
 }
-
-// ---------------- STYLES ----------------
-
-final _titleStyle = TextStyle(
-  color: Colors.white,
-  fontSize: 16,
-  fontWeight: FontWeight.bold,
-  fontFamily: GoogleFonts.montserrat().fontFamily,
-);
-
-final _subtitleStyle = TextStyle(
-  color: Colors.white54,
-  fontSize: 12,
-  fontFamily: GoogleFonts.montserrat().fontFamily,
-);

@@ -17,7 +17,7 @@ class DatabaseHelper {
   DatabaseHelper._init();
 
   /// Current database version
-  static const int _dbVersion = 9;
+  static const int _dbVersion = 11;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -213,6 +213,12 @@ class DatabaseHelper {
     if (oldVersion < 9) {
       await _migrateToVersion9(db);
     }
+    if (oldVersion < 10) {
+      await _migrateToVersion10(db);
+    }
+    if (oldVersion < 11) {
+      await _migrateToVersion11(db);
+    }
   }
 
   /// Version 6 migration: Add isExternalTransaction to payments
@@ -256,6 +262,22 @@ class DatabaseHelper {
   /// Version 9 migration: Prune all non-canonical categories and remap data.
   Future<void> _migrateToVersion9(Database db) async {
     await _normalizeCategoriesToPredefinedSet(db);
+  }
+
+  /// Version 10 migration: Add customSvg column for custom category icons.
+  Future<void> _migrateToVersion10(Database db) async {
+    try {
+      await db.execute('ALTER TABLE categories ADD COLUMN customSvg TEXT');
+    } catch (_) {}
+  }
+
+  /// Version 11 migration: Add isIncome column to distinguish credits from debits.
+  Future<void> _migrateToVersion11(Database db) async {
+    try {
+      await db.execute(
+        'ALTER TABLE payments ADD COLUMN isIncome INTEGER DEFAULT 0',
+      );
+    } catch (_) {}
   }
 
   Future<void> _normalizeCategoriesToPredefinedSet(Database db) async {
@@ -610,6 +632,7 @@ class DatabaseHelper {
       label TEXT NOT NULL,
       icon TEXT,
       assetPath TEXT,
+      customSvg TEXT,
       isPredefined INTEGER DEFAULT 1,
       uuid TEXT UNIQUE,
       syncStatus TEXT DEFAULT 'PENDING_CREATE',
@@ -688,6 +711,7 @@ class DatabaseHelper {
       lastSyncedAt TEXT,
       isDeleted INTEGER DEFAULT 0,
       isExternalTransaction INTEGER DEFAULT 0,
+      isIncome INTEGER DEFAULT 0,
       FOREIGN KEY (cardId) REFERENCES cards (id) ON DELETE CASCADE,
       FOREIGN KEY (categoryId) REFERENCES categories (id) ON DELETE SET NULL
     )''');
@@ -1067,8 +1091,7 @@ class DatabaseHelper {
       // 1. Insert the payment
       final id = await txn.insert('payments', map);
 
-      // 2. Get the card to determine how to update balance
-      // Skip balance deduction for external transactions
+      // 2. Update card balance based on transaction type
       if (!payment.isExternalTransaction) {
         final cardResult = await txn.query(
           'cards',
@@ -1079,22 +1102,44 @@ class DatabaseHelper {
           final card = BankCard.fromMap(cardResult.first);
           final now = DateTime.now().toIso8601String();
 
-          if (card.accountType == AccountType.credit) {
-            // For credit cards: increase used amount
-            await txn.execute(
-              '''
-              UPDATE cards SET usedAmount = usedAmount + ?, updatedAt = ? WHERE id = ?
-            ''',
-              [payment.amount, now, payment.cardId],
-            );
+          if (payment.isIncome) {
+            // Income: add money back to the card
+            if (card.accountType == AccountType.credit) {
+              // For credit cards: decrease used amount (payment towards card)
+              await txn.execute(
+                '''
+                UPDATE cards SET usedAmount = MAX(0, usedAmount - ?), updatedAt = ? WHERE id = ?
+              ''',
+                [payment.amount, now, payment.cardId],
+              );
+            } else {
+              // For cash/debit: increase balance
+              await txn.execute(
+                '''
+                UPDATE cards SET balance = balance + ?, updatedAt = ? WHERE id = ?
+              ''',
+                [payment.amount, now, payment.cardId],
+              );
+            }
           } else {
-            // For cash/debit: decrease balance
-            await txn.execute(
-              '''
-              UPDATE cards SET balance = balance - ?, updatedAt = ? WHERE id = ?
-            ''',
-              [payment.amount, now, payment.cardId],
-            );
+            // Expense: deduct from card
+            if (card.accountType == AccountType.credit) {
+              // For credit cards: increase used amount
+              await txn.execute(
+                '''
+                UPDATE cards SET usedAmount = usedAmount + ?, updatedAt = ? WHERE id = ?
+              ''',
+                [payment.amount, now, payment.cardId],
+              );
+            } else {
+              // For cash/debit: decrease balance
+              await txn.execute(
+                '''
+                UPDATE cards SET balance = balance - ?, updatedAt = ? WHERE id = ?
+              ''',
+                [payment.amount, now, payment.cardId],
+              );
+            }
           }
 
           await txn.execute(
@@ -1120,7 +1165,7 @@ class DatabaseHelper {
   Future<List<Payment>> getAllPayments() async {
     final db = await database;
     final result = await db.rawQuery('''
-      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset
+      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset, c.customSvg as category_customSvg
       FROM payments p
       LEFT JOIN categories c ON p.categoryId = c.id
       WHERE p.isDeleted = 0
@@ -1137,7 +1182,7 @@ class DatabaseHelper {
     final db = await database;
     final result = await db.rawQuery(
       '''
-      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset
+      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset, c.customSvg as category_customSvg
       FROM payments p
       LEFT JOIN categories c ON p.categoryId = c.id
       WHERE p.date BETWEEN ? AND ?
@@ -1152,7 +1197,7 @@ class DatabaseHelper {
   Future<List<Payment>> getRecurringPayments() async {
     final db = await database;
     final result = await db.rawQuery('''
-      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset
+      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset, c.customSvg as category_customSvg
       FROM payments p
       LEFT JOIN categories c ON p.categoryId = c.id
       WHERE p.isRecurring = 1
@@ -1696,7 +1741,7 @@ class DatabaseHelper {
     final db = await database;
     final result = await db.rawQuery(
       '''
-      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset
+      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset, c.customSvg as category_customSvg
       FROM payments p
       LEFT JOIN categories c ON p.categoryId = c.id
       WHERE p.categoryId = ?
@@ -1740,7 +1785,7 @@ class DatabaseHelper {
     final db = await database;
     final result = await db.rawQuery(
       '''
-      SELECT p.*, c.label as category_label, c.icon as category_icon
+      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset, c.customSvg as category_customSvg
       FROM payments p
       LEFT JOIN categories c ON p.categoryId = c.id
       WHERE p.id = ?
@@ -1756,7 +1801,7 @@ class DatabaseHelper {
     final db = await database;
     final result = await db.rawQuery(
       '''
-      SELECT p.*, c.label as category_label, c.icon as category_icon
+      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset, c.customSvg as category_customSvg
       FROM payments p
       LEFT JOIN categories c ON p.categoryId = c.id
       WHERE p.note LIKE ? OR c.label LIKE ?
@@ -1947,7 +1992,8 @@ class DatabaseHelper {
 
     for (final category in PredefinedCategories.all) {
       final importedMatch = importedCategories.firstWhere(
-        (row) => _targetCategoryLabel(row['label']?.toString()) == category.label,
+        (row) =>
+            _targetCategoryLabel(row['label']?.toString()) == category.label,
         orElse: () => const {},
       );
       final preferredUuid = importedMatch['uuid']?.toString();
@@ -2000,10 +2046,7 @@ class DatabaseHelper {
           }, columns),
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
-        targetByLabel[targetKey] = (
-          id: insertedId,
-          uuid: categoryUuid,
-        );
+        targetByLabel[targetKey] = (id: insertedId, uuid: categoryUuid);
       }
     }
 
