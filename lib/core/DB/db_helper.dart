@@ -17,7 +17,7 @@ class DatabaseHelper {
   DatabaseHelper._init();
 
   /// Current database version
-  static const int _dbVersion = 11;
+  static const int _dbVersion = 12;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -43,7 +43,8 @@ class DatabaseHelper {
     await _repairCategoriesSchemaCompatibility(db);
     await _repairMissingUuids(db);
     await _repairCategoryAssetPathsToPng(db);
-    await _normalizeCategoriesToPredefinedSet(db);
+    await _repairDuplicateCategories(db);
+    await _repairCategorySvgs(db);
 
     // Initialize sqflite_live for debugging (only in debug mode)
     assert(() {
@@ -53,6 +54,29 @@ class DatabaseHelper {
 
     return db;
   }
+
+    Future<void> _repairCategorySvgs(Database db) async {
+    // Force update the default categories to ensure they have the new SVG
+    for (final defaultCat in DefaultCategories.all) {
+      await db.update(
+        'categories',
+        {'svgIcon': defaultCat.svgIcon},
+        where: 'label = ?',
+        whereArgs: [defaultCat.label],
+      );
+      // Force update subcategories
+      for (final sub in defaultCat.subcategories) {
+        await db.update(
+          'subcategories',
+          {'svgIcon': sub.svgIcon},
+          where: 'label = ? AND categoryId = (SELECT id FROM categories WHERE label = ?)',
+          whereArgs: [sub.label, defaultCat.label],
+        );
+      }
+    }
+  }
+
+  
 
   /// Assign UUIDs to any rows that are still missing one.
   /// This covers records inserted before the UUID fix (e.g. seeded categories).
@@ -148,6 +172,50 @@ class DatabaseHelper {
     } catch (_) {}
   }
 
+  Future<void> _repairDuplicateCategories(Database db) async {
+    try {
+      // Re-map payments to the lowest ID category with the same label
+      await db.execute('''
+        UPDATE payments
+        SET categoryId = (
+          SELECT MIN(c2.id) 
+          FROM categories c1 
+          JOIN categories c2 ON c1.label = c2.label 
+          WHERE c1.id = payments.categoryId
+        )
+        WHERE categoryId IS NOT NULL
+      ''');
+
+      // Re-map payments to the lowest ID subcategory with the same label
+      await db.execute('''
+        UPDATE payments
+        SET subcategoryId = (
+          SELECT MIN(s2.id) 
+          FROM subcategories s1 
+          JOIN subcategories s2 ON s1.label = s2.label AND s1.categoryId = s2.categoryId
+          WHERE s1.id = payments.subcategoryId
+        )
+        WHERE subcategoryId IS NOT NULL
+      ''');
+
+      // Delete duplicate categories
+      await db.execute('''
+        DELETE FROM categories 
+        WHERE id NOT IN (
+          SELECT MIN(id) FROM categories GROUP BY label
+        )
+      ''');
+
+      // Delete duplicate subcategories
+      await db.execute('''
+        DELETE FROM subcategories 
+        WHERE id NOT IN (
+          SELECT MIN(id) FROM subcategories GROUP BY label, categoryId
+        )
+      ''');
+    } catch (_) {}
+  }
+
   Future<void> _repairCategoriesSchemaCompatibility(Database db) async {
     try {
       final columnNames = await _getColumnNames(db, 'categories');
@@ -219,6 +287,9 @@ class DatabaseHelper {
     if (oldVersion < 11) {
       await _migrateToVersion11(db);
     }
+    if (oldVersion < 12) {
+      await _migrateToVersion12(db);
+    }
   }
 
   /// Version 6 migration: Add isExternalTransaction to payments
@@ -256,12 +327,12 @@ class DatabaseHelper {
 
   /// Version 8 migration: Replace merchant categories with broad categories.
   Future<void> _migrateToVersion8(Database db) async {
-    await _normalizeCategoriesToPredefinedSet(db);
+    // Handled in v12 wipe
   }
 
   /// Version 9 migration: Prune all non-canonical categories and remap data.
   Future<void> _migrateToVersion9(Database db) async {
-    await _normalizeCategoriesToPredefinedSet(db);
+    // Handled in v12 wipe
   }
 
   /// Version 10 migration: Add customSvg column for custom category icons.
@@ -280,113 +351,32 @@ class DatabaseHelper {
     } catch (_) {}
   }
 
-  Future<void> _normalizeCategoriesToPredefinedSet(Database db) async {
+  /// Version 12 migration: Add subcategories
+  Future<void> _migrateToVersion12(Database db) async {
     try {
-      final categoryColumns = await _getColumnNames(db, 'categories');
-      final paymentColumns = await _getColumnNames(db, 'payments');
-      final targetRows = <String, ({int id, String? uuid})>{};
-
-      for (final category in PredefinedCategories.all) {
-        final row = await _upsertPredefinedCategory(db, category);
-        targetRows[category.label] = (
-          id: row['id'] as int,
-          uuid: row['uuid'] as String?,
-        );
-      }
-
-      final activeCategories = await db.query(
-        'categories',
-        columns: ['id', 'label'],
-        where: 'COALESCE(isDeleted, 0) = 0',
+      await db.execute("""CREATE TABLE subcategories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        categoryId INTEGER NOT NULL,
+        label TEXT NOT NULL,
+        svgIcon TEXT,
+        uuid TEXT UNIQUE,
+        categoryUuid TEXT,
+        syncStatus TEXT DEFAULT 'PENDING_CREATE',
+        lastSyncedAt TEXT,
+        isDeleted INTEGER DEFAULT 0,
+        FOREIGN KEY (categoryId) REFERENCES categories (id) ON DELETE CASCADE
+      )""");
+      await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_subcategories_categoryId ON subcategories(categoryId)",
       );
-
-      for (final row in activeCategories) {
-        final id = _asInt(row['id']);
-        if (id == null) continue;
-
-        final targetLabel = PredefinedCategories.legacyTargetLabel(
-          row['label']?.toString(),
-        );
-        if (targetLabel == null) continue;
-        final target = targetRows[targetLabel] ?? targetRows['Shopping'];
-        if (target == null || target.id == id) continue;
-
-        await db.update(
-          'payments',
-          _filterColumns({
-            'categoryId': target.id,
-            'categoryUuid': target.uuid,
-          }, paymentColumns),
-          where: 'categoryId = ?',
-          whereArgs: [id],
-        );
-
-        await db.update(
-          'categories',
-          _filterColumns({
-            'isDeleted': 1,
-            'syncStatus': SyncStatus.pendingDelete.dbValue,
-          }, categoryColumns),
-          where: 'id = ?',
-          whereArgs: [id],
-        );
-      }
+      await db.execute(
+        "ALTER TABLE payments ADD COLUMN subcategoryId INTEGER REFERENCES subcategories (id) ON DELETE SET NULL",
+      );
+      await db.execute("ALTER TABLE payments ADD COLUMN subcategoryUuid TEXT");
+      await db.execute("ALTER TABLE categories ADD COLUMN svgIcon TEXT");
+      await db.execute("DELETE FROM categories");
+      await _seedDefaultCategoriesData(db);
     } catch (_) {}
-  }
-
-  Future<Map<String, Object?>> _upsertPredefinedCategory(
-    Database db,
-    Category category,
-  ) async {
-    final categoryColumns = await _getColumnNames(db, 'categories');
-    final rows = await db.query(
-      'categories',
-      where: 'LOWER(label) = ?',
-      whereArgs: [category.label.toLowerCase()],
-      orderBy: 'COALESCE(isDeleted, 0) ASC, id ASC',
-      limit: 1,
-    );
-
-    if (rows.isNotEmpty) {
-      final id = rows.first['id'] as int;
-      final uuid = rows.first['uuid'] as String? ?? const Uuid().v4();
-      await db.update(
-        'categories',
-        _filterColumns({
-          'label': category.label,
-          'icon': category.icon,
-          'assetPath': category.assetPath,
-          'isPredefined': 1,
-          'uuid': uuid,
-          'syncStatus': SyncStatus.pendingUpdate.dbValue,
-          'isDeleted': 0,
-        }, categoryColumns),
-        where: 'id = ?',
-        whereArgs: [id],
-      );
-      return {'id': id, 'uuid': uuid};
-    }
-
-    final uuid = const Uuid().v4();
-    final id = await db.insert(
-      'categories',
-      _filterColumns({
-        'label': category.label,
-        'icon': category.icon,
-        'assetPath': category.assetPath,
-        'isPredefined': 1,
-        'uuid': uuid,
-        'syncStatus': SyncStatus.pendingCreate.dbValue,
-        'isDeleted': 0,
-      }, categoryColumns),
-    );
-    return {'id': id, 'uuid': uuid};
-  }
-
-  Future<void> _ensurePredefinedCategories(Database db) async {
-    for (final category in PredefinedCategories.all) {
-      await _upsertPredefinedCategory(db, category);
-    }
   }
 
   Future<Set<String>> _getColumnNames(Database db, String table) async {
@@ -630,14 +620,25 @@ class DatabaseHelper {
     await db.execute('''CREATE TABLE categories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       label TEXT NOT NULL,
-      icon TEXT,
-      assetPath TEXT,
-      customSvg TEXT,
-      isPredefined INTEGER DEFAULT 1,
+      svgIcon TEXT,
       uuid TEXT UNIQUE,
       syncStatus TEXT DEFAULT 'PENDING_CREATE',
       lastSyncedAt TEXT,
       isDeleted INTEGER DEFAULT 0
+    )''');
+
+    // Subcategories table
+    await db.execute('''CREATE TABLE subcategories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      categoryId INTEGER NOT NULL,
+      label TEXT NOT NULL,
+      svgIcon TEXT,
+      uuid TEXT UNIQUE,
+      categoryUuid TEXT,
+      syncStatus TEXT DEFAULT 'PENDING_CREATE',
+      lastSyncedAt TEXT,
+      isDeleted INTEGER DEFAULT 0,
+      FOREIGN KEY (categoryId) REFERENCES categories (id) ON DELETE CASCADE
     )''');
 
     // Cards table with account types
@@ -703,17 +704,20 @@ class DatabaseHelper {
       note TEXT,
       cardId INTEGER NOT NULL,
       categoryId INTEGER,
+      subcategoryId INTEGER,
       createdAt TEXT NOT NULL,
       uuid TEXT UNIQUE,
       cardUuid TEXT,
       categoryUuid TEXT,
+      subcategoryUuid TEXT,
       syncStatus TEXT DEFAULT 'PENDING_CREATE',
       lastSyncedAt TEXT,
       isDeleted INTEGER DEFAULT 0,
       isExternalTransaction INTEGER DEFAULT 0,
       isIncome INTEGER DEFAULT 0,
       FOREIGN KEY (cardId) REFERENCES cards (id) ON DELETE CASCADE,
-      FOREIGN KEY (categoryId) REFERENCES categories (id) ON DELETE SET NULL
+      FOREIGN KEY (categoryId) REFERENCES categories (id) ON DELETE SET NULL,
+      FOREIGN KEY (subcategoryId) REFERENCES subcategories (id) ON DELETE SET NULL
     )''');
 
     // App settings table
@@ -833,14 +837,54 @@ class DatabaseHelper {
   /// Seed predefined categories (called once during onboarding)
   Future<void> seedPredefinedCategories() async {
     final db = await database;
-
-    // Keep this idempotent. Older installs may have the seeded flag set while
-    // category rows are missing, soft-deleted, duplicated, or still on legacy
-    // merchant names.
-    await _normalizeCategoriesToPredefinedSet(db);
-
-    // Mark as seeded
+    await _seedDefaultCategoriesData(db);
     await setSetting(AppSettingsKeys.categoriesSeeded, 'true');
+  }
+
+  Future<void> _seedDefaultCategoriesData(DatabaseExecutor db) async {
+    for (final cat in DefaultCategories.all) {
+      // Check if it already exists to prevent duplication
+      final existingCat = await db.query(
+        'categories',
+        where: 'label = ?',
+        whereArgs: [cat.label],
+      );
+      int catId;
+      String categoryUuid;
+
+      if (existingCat.isNotEmpty) {
+        catId = existingCat.first['id'] as int;
+        categoryUuid = existingCat.first['uuid'] as String;
+      } else {
+        categoryUuid = const Uuid().v4();
+        catId = await db.insert('categories', {
+          'label': cat.label,
+          'svgIcon': cat.svgIcon,
+          'uuid': categoryUuid,
+          'syncStatus': 'PENDING_CREATE',
+          'isDeleted': 0,
+        });
+      }
+
+      for (final sub in cat.subcategories) {
+        final existingSub = await db.query(
+          'subcategories',
+          where: 'categoryId = ? AND label = ?',
+          whereArgs: [catId, sub.label],
+        );
+        if (existingSub.isEmpty) {
+          await db.insert('subcategories', {
+            'categoryId': catId,
+            'label': sub.label,
+            'svgIcon': sub.svgIcon,
+            'uuid': const Uuid().v4(),
+            'categoryUuid': categoryUuid,
+            'syncStatus': 'PENDING_CREATE',
+            'isDeleted': 0,
+          });
+        }
+      }
+    }
   }
 
   /// Get all categories (excluding soft-deleted)
@@ -859,18 +903,18 @@ class DatabaseHelper {
         orderBy: 'label ASC',
       );
     }
-    final categories = result.map((json) => Category.fromMap(json)).toList();
-    final preferredOrder = {
-      for (var index = 0; index < PredefinedCategories.all.length; index++)
-        PredefinedCategories.all[index].label.toLowerCase(): index,
-    };
-    categories.sort((a, b) {
-      final orderA = preferredOrder[a.label.toLowerCase()] ?? 999;
-      final orderB = preferredOrder[b.label.toLowerCase()] ?? 999;
-      if (orderA != orderB) return orderA.compareTo(orderB);
-      return a.label.toLowerCase().compareTo(b.label.toLowerCase());
-    });
-    return categories;
+    final categoryList = <Category>[];
+    for (final row in result) {
+      final subResult = await db.query(
+        'subcategories',
+        where: 'categoryId = ? AND COALESCE(isDeleted, 0) = 0',
+        whereArgs: [row['id']],
+      );
+      final map = Map<String, dynamic>.from(row);
+      map['subcategories'] = subResult;
+      categoryList.add(Category.fromMap(map));
+    }
+    return categoryList;
   }
 
   /// Get category by ID
@@ -882,7 +926,14 @@ class DatabaseHelper {
       whereArgs: [id],
     );
     if (result.isEmpty) return null;
-    return Category.fromMap(result.first);
+    final subResult = await db.query(
+      'subcategories',
+      where: 'categoryId = ? AND COALESCE(isDeleted, 0) = 0',
+      whereArgs: [id],
+    );
+    final map = Map<String, dynamic>.from(result.first);
+    map['subcategories'] = subResult;
+    return Category.fromMap(map);
   }
 
   // ============================================================
@@ -1078,7 +1129,7 @@ class DatabaseHelper {
         if (cardRow.isNotEmpty) map['cardUuid'] = cardRow.first['uuid'];
       }
       // Resolve category UUID
-      if (map['categoryUuid'] == null && payment.categoryId > 0) {
+      if (map['categoryUuid'] == null && (payment.categoryId ?? 0) > 0) {
         final catRow = await txn.query(
           'categories',
           columns: ['uuid'],
@@ -1165,9 +1216,14 @@ class DatabaseHelper {
   Future<List<Payment>> getAllPayments() async {
     final db = await database;
     final result = await db.rawQuery('''
-      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset, c.customSvg as category_customSvg
+      SELECT p.*, 
+             c.label as category_label, 
+             c.svgIcon as category_svgIcon,
+             s.label as subcategory_label,
+             s.svgIcon as subcategory_svgIcon
       FROM payments p
       LEFT JOIN categories c ON p.categoryId = c.id
+      LEFT JOIN subcategories s ON p.subcategoryId = s.id
       WHERE p.isDeleted = 0
       ORDER BY p.date DESC
     ''');
@@ -1182,9 +1238,14 @@ class DatabaseHelper {
     final db = await database;
     final result = await db.rawQuery(
       '''
-      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset, c.customSvg as category_customSvg
+      SELECT p.*, 
+             c.label as category_label, 
+             c.svgIcon as category_svgIcon,
+             s.label as subcategory_label,
+             s.svgIcon as subcategory_svgIcon
       FROM payments p
       LEFT JOIN categories c ON p.categoryId = c.id
+      LEFT JOIN subcategories s ON p.subcategoryId = s.id
       WHERE p.date BETWEEN ? AND ?
       ORDER BY p.date DESC
     ''',
@@ -1197,9 +1258,14 @@ class DatabaseHelper {
   Future<List<Payment>> getRecurringPayments() async {
     final db = await database;
     final result = await db.rawQuery('''
-      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset, c.customSvg as category_customSvg
+      SELECT p.*, 
+             c.label as category_label, 
+             c.svgIcon as category_svgIcon,
+             s.label as subcategory_label,
+             s.svgIcon as subcategory_svgIcon
       FROM payments p
       LEFT JOIN categories c ON p.categoryId = c.id
+      LEFT JOIN subcategories s ON p.subcategoryId = s.id
       WHERE p.isRecurring = 1
       ORDER BY p.date ASC
     ''');
@@ -1731,6 +1797,27 @@ class DatabaseHelper {
     return await db.delete('categories', where: 'id = ?', whereArgs: [id]);
   }
 
+  /// Delete a subcategory (soft delete for sync)
+  Future<int> deleteSubcategory(int id) async {
+    final db = await database;
+    final record = await db.query(
+      'subcategories',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (record.isNotEmpty &&
+        (record.first['syncStatus'] == 'SYNCED' ||
+            record.first['syncStatus'] == 'PENDING_UPDATE')) {
+      return await db.update(
+        'subcategories',
+        {'isDeleted': 1, 'syncStatus': 'PENDING_DELETE'},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+    return await db.delete('subcategories', where: 'id = ?', whereArgs: [id]);
+  }
+
   /// Get recurring payments (alias)
   Future<List<Payment>> getRecurringPayment() async {
     return await getRecurringPayments();
@@ -1741,10 +1828,15 @@ class DatabaseHelper {
     final db = await database;
     final result = await db.rawQuery(
       '''
-      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset, c.customSvg as category_customSvg
+      SELECT p.*, 
+             c.label as category_label, 
+             c.svgIcon as category_svgIcon,
+             s.label as subcategory_label,
+             s.svgIcon as subcategory_svgIcon
       FROM payments p
       LEFT JOIN categories c ON p.categoryId = c.id
-      WHERE p.categoryId = ?
+      LEFT JOIN subcategories s ON p.subcategoryId = s.id
+      WHERE p.categoryId = ? AND p.isDeleted = 0
       ORDER BY p.date DESC
     ''',
       [categoryId],
@@ -1756,7 +1848,7 @@ class DatabaseHelper {
   Future<void> deleteAllData() async {
     final db = await database;
     await db.transaction((txn) async {
-      for (final table in ['payments', 'cards', 'categories', 'wishlist']) {
+      for (final table in ['payments', 'cards', 'categories', 'subcategories', 'wishlist']) {
         await txn.delete(table);
       }
       // Clean up aggregation tables
@@ -1785,9 +1877,14 @@ class DatabaseHelper {
     final db = await database;
     final result = await db.rawQuery(
       '''
-      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset, c.customSvg as category_customSvg
+      SELECT p.*, 
+             c.label as category_label, 
+             c.svgIcon as category_svgIcon,
+             s.label as subcategory_label,
+             s.svgIcon as subcategory_svgIcon
       FROM payments p
       LEFT JOIN categories c ON p.categoryId = c.id
+      LEFT JOIN subcategories s ON p.subcategoryId = s.id
       WHERE p.id = ?
     ''',
       [id],
@@ -1801,13 +1898,18 @@ class DatabaseHelper {
     final db = await database;
     final result = await db.rawQuery(
       '''
-      SELECT p.*, c.label as category_label, c.icon as category_icon, c.assetPath as category_asset, c.customSvg as category_customSvg
+      SELECT p.*, 
+             c.label as category_label, 
+             c.svgIcon as category_svgIcon,
+             s.label as subcategory_label,
+             s.svgIcon as subcategory_svgIcon
       FROM payments p
       LEFT JOIN categories c ON p.categoryId = c.id
-      WHERE p.note LIKE ? OR c.label LIKE ?
+      LEFT JOIN subcategories s ON p.subcategoryId = s.id
+      WHERE p.note LIKE ? OR c.label LIKE ? OR s.label LIKE ? AND p.isDeleted = 0
       ORDER BY p.date DESC
     ''',
-      ['%$query%', '%$query%'],
+      ['%$query%', '%$query%', '%$query%'],
     );
     return result.map((json) => Payment.fromMap(json)).toList();
   }
@@ -1990,7 +2092,7 @@ class DatabaseHelper {
       if (oldId != null) importedTargetLabels[oldId.toString()] = label;
     }
 
-    for (final category in PredefinedCategories.all) {
+    for (final category in DefaultCategories.all) {
       final importedMatch = importedCategories.firstWhere(
         (row) =>
             _targetCategoryLabel(row['label']?.toString()) == category.label,
@@ -2000,9 +2102,7 @@ class DatabaseHelper {
 
       final row = <String, Object?>{
         'label': category.label,
-        'icon': category.icon,
-        'assetPath': category.assetPath,
-        'isPredefined': 1,
+        'svgIcon': category.svgIcon,
         'uuid': preferredUuid?.isNotEmpty == true
             ? preferredUuid
             : const Uuid().v4(),
@@ -2096,11 +2196,12 @@ class DatabaseHelper {
   }
 
   String _targetCategoryLabel(String? label) {
-    final remapped = PredefinedCategories.legacyTargetLabel(label);
-    if (remapped != null) return remapped;
-
-    final trimmed = label?.trim() ?? '';
-    return trimmed.isNotEmpty ? trimmed : 'Shopping';
+    if (label == null || label.trim().isEmpty) return 'Shopping';
+    final l = label.trim().toLowerCase();
+    for (final cat in DefaultCategories.all) {
+      if (cat.label.toLowerCase() == l) return cat.label;
+    }
+    return 'Shopping';
   }
 
   String _labelKey(String label) {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -11,53 +12,148 @@ class PaymentCategorySection extends StatelessWidget {
     super.key,
     required this.categoriesState,
     required this.selectedCategoryId,
+    required this.selectedSubcategoryId,
     required this.onCategorySelected,
+    required this.onSubcategorySelected,
     required this.onAddCategory,
+    required this.onAddSubcategory,
     required this.onReloadCategories,
   });
 
   final CategoriesState categoriesState;
   final int? selectedCategoryId;
+  final int? selectedSubcategoryId;
   final ValueChanged<int?> onCategorySelected;
+  final ValueChanged<int?> onSubcategorySelected;
   final VoidCallback onAddCategory;
+  final VoidCallback onAddSubcategory;
   final Future<void> Function() onReloadCategories;
 
   @override
   Widget build(BuildContext context) {
     final categories = categoriesState.categories;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: categories.isNotEmpty
-          ? Wrap(
+    if (categories.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: _EmptyCategoryState(
+          errorMessage: categoriesState.errorMessage,
+          onReloadCategories: onReloadCategories,
+          onAddCategory: onAddCategory,
+        ),
+      );
+    }
+
+    if (selectedCategoryId != null) {
+      final selectedCategory = categories.firstWhere(
+        (c) => c.id == selectedCategoryId,
+        orElse: () => categories.first,
+      );
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.08),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => onCategorySelected(null),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight.withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      ),
+                      child: const Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: Colors.white),
+                    ),
+                  ),
+                  const Gap(16),
+                  if (selectedCategory.svgIcon.isNotEmpty)
+                    SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: FittedBox(
+                        fit: BoxFit.contain,
+                        child: SvgPicture.string(
+                          selectedCategory.svgIcon,
+                          colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                        ),
+                      ),
+                    )
+                  else
+                    const Icon(Icons.category_rounded, color: Colors.white, size: 24),
+                  const Gap(12),
+                  Text(
+                    selectedCategory.label,
+                    style: GoogleFonts.montserrat(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+            const Gap(16),
+            Wrap(
               spacing: 12,
               runSpacing: 12,
               children: [
-                ...categories.map(
-                  (cat) => CategoryChip(
-                    iconPath: cat.assetPath ?? '',
-                    label: cat.label,
-                    isSVG: cat.usesSvgIcon,
-                    isSelected: selectedCategoryId == cat.id,
-                    onTap: () => onCategorySelected(cat.id),
-                    customSvg: cat.customSvg,
+                ...selectedCategory.subcategories.map(
+                  (sub) => CategoryChip(
+                    label: sub.label,
+                    isSelected: selectedSubcategoryId == sub.id,
+                    onTap: () => onSubcategorySelected(sub.id),
+                    svgIcon: sub.svgIcon,
                   ),
                 ),
-                _AddCategoryActionChip(onTap: onAddCategory),
+                _AddCategoryActionChip(
+                  label: 'Add Subcategory',
+                  onTap: onAddSubcategory,
+                ),
               ],
             )
-          : _EmptyCategoryState(
-              errorMessage: categoriesState.errorMessage,
-              onReloadCategories: onReloadCategories,
-              onAddCategory: onAddCategory,
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          ...categories.map(
+            (cat) => CategoryChip(
+              label: cat.label,
+              isSelected: false,
+              onTap: () => onCategorySelected(cat.id),
+              svgIcon: cat.svgIcon,
             ),
+          ),
+          _AddCategoryActionChip(
+            label: 'Add Category',
+            onTap: onAddCategory,
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _AddCategoryActionChip extends StatelessWidget {
-  const _AddCategoryActionChip({required this.onTap});
+  const _AddCategoryActionChip({required this.label, required this.onTap});
 
+  final String label;
   final VoidCallback onTap;
 
   @override
@@ -67,7 +163,7 @@ class _AddCategoryActionChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: AppColors.surfaceLight.withValues(alpha: 0.45),
+          color: Colors.black,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
@@ -89,7 +185,7 @@ class _AddCategoryActionChip extends StatelessWidget {
             ),
             const Gap(8),
             Text(
-              'Add Category',
+              label,
               style: GoogleFonts.montserrat(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,

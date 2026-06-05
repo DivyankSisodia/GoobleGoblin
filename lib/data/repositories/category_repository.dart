@@ -12,11 +12,17 @@ abstract class CategoryRepository {
   /// Insert a new category
   AsyncResult<int> insertCategory(Category category);
 
+  /// Insert a new subcategory
+  AsyncResult<int> insertSubcategory(SubCategory subcategory);
+
   /// Update an existing category
   AsyncResult<bool> updateCategory(Category category);
 
   /// Delete a category
   AsyncResult<bool> deleteCategory(int id);
+
+  /// Delete a subcategory
+  AsyncResult<bool> deleteSubcategory(int id);
 
   /// Get default categories (for seeding)
   List<Category> getDefaultCategories();

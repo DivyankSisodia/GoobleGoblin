@@ -5,47 +5,49 @@ import 'package:gap/gap.dart';
 import '../../../core/colors.dart';
 
 class CategoryChip extends StatelessWidget {
-  final String iconPath;
   final String label;
-  final bool isSVG;
   final bool isSelected;
   final VoidCallback onTap;
-  final String? customSvg; // Inline SVG markup
+  final String? svgIcon;
 
   const CategoryChip({
     super.key,
-    required this.iconPath,
     required this.label,
-    required this.isSVG,
     required this.isSelected,
     required this.onTap,
-    this.customSvg,
+    this.svgIcon,
   });
 
   @override
   Widget build(BuildContext context) {
-    final hasCustomSvg = customSvg != null && customSvg!.trim().isNotEmpty;
-    final hasAssetIcon = iconPath.trim().isNotEmpty;
+    final hasCustomSvg = svgIcon != null && svgIcon!.trim().isNotEmpty;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primaryNeonDark
-              : AppColors.primaryNeonDark.withOpacity(0.5),
+          color: Colors.black,
           borderRadius: BorderRadius.circular(16),
-          border: isSelected ? Border.all(color: Colors.white, width: 2) : null,
+          border: Border.all(
+            color: isSelected ? AppColors.primaryNeon : Colors.white.withOpacity(0.08),
+            width: isSelected ? 2 : 1,
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (hasCustomSvg)
-              SvgPicture.string(customSvg!, height: 30, width: 30)
-            else if (hasAssetIcon)
-              isSVG
-                  ? SvgPicture.asset(iconPath, height: 30, width: 30)
-                  : Image.asset(iconPath, height: 30, width: 30)
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: FittedBox(
+                  fit: BoxFit.contain,
+                  child: SvgPicture.string(
+                    svgIcon!,
+                    colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                  ),
+                ),
+              )
             else
               const Icon(Icons.category_rounded, color: Colors.white, size: 24),
             const Gap(8),

@@ -125,14 +125,14 @@ class Validators {
   /// Validates category data
   static Result<bool> validateCategory({
     required String? label,
-    required String? icon,
+    required String? svgIcon,
   }) {
     final labelResult = notEmpty(label, 'Category name');
     if (labelResult.isFailure) {
       return ResultHelper.failure(labelResult.failureValue);
     }
 
-    final iconResult = notEmpty(icon, 'Icon');
+    final iconResult = notEmpty(svgIcon, 'Icon');
     if (iconResult.isFailure) {
       return ResultHelper.failure(iconResult.failureValue);
     }

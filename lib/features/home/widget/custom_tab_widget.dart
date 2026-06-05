@@ -23,6 +23,7 @@ class CustomTabWidget extends ConsumerStatefulWidget {
 class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
   final List<String> tabs = ['Transactions', 'Cards', 'Categories'];
   int selectedIndex = 0;
+  int? _expandedCategoryId;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +38,10 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
           child: CustomSegmentedTabBar(
             tabs: tabs,
             selectedIndex: selectedIndex,
-            onChanged: (index) => setState(() => selectedIndex = index),
+            onChanged: (index) => setState(() {
+              selectedIndex = index;
+              _expandedCategoryId = null;
+            }),
           ),
         ),
         const Gap(24),
@@ -99,14 +103,17 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
             : CurrencyUtils.format(payment.amount);
         final amountColor = isIncome ? AppColors.successGreen : Colors.white;
 
+        final subcat = payment.subcategory;
         return _itemTile(
           title: title,
-          subtitle: subtitle,
+          subtitle: subcat != null
+              ? '${category?.label ?? 'Other'} • ${subcat.label}'
+              : subtitle,
           amount: amountText,
           highlight: false,
-          iconPath: category?.assetPath,
-          categoryIcon: category?.icon,
-          customSvg: category?.customSvg,
+          svgIcon: subcat != null && subcat.svgIcon.isNotEmpty
+              ? subcat.svgIcon
+              : category?.svgIcon,
           amountColor: amountColor,
         );
       },
@@ -173,23 +180,164 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
           (sum, p) => sum + p.amount,
         );
         final paymentCount = relatedPayments.length;
+        final isExpanded = _expandedCategoryId == category.id;
 
-        return GestureDetector(
-          onLongPress: () =>
-              _showDeleteCategorySheet(category, paymentCount, relatedPayments),
-          child: _itemTile(
-            title: category.label,
-            subtitle: paymentCount > 0
-                ? '$paymentCount transaction${paymentCount == 1 ? '' : 's'}'
-                : 'No transactions',
-            amount: paymentCount > 0 ? CurrencyUtils.format(totalAmount) : '',
-            highlight: false,
-            iconPath: category.assetPath,
-            categoryIcon: category.icon,
-            customSvg: category.customSvg,
-          ),
+        return Column(
+          children: [
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _expandedCategoryId = isExpanded ? null : category.id;
+                });
+              },
+              onLongPress: () =>
+                  _showDeleteCategorySheet(category, paymentCount, relatedPayments),
+              child: _itemTile(
+                title: category.label,
+                subtitle: paymentCount > 0
+                    ? '$paymentCount transaction${paymentCount == 1 ? '' : 's'}'
+                    : 'No transactions',
+                amount: paymentCount > 0 ? CurrencyUtils.format(totalAmount) : '',
+                highlight: isExpanded,
+                svgIcon: category.svgIcon,
+                trailing: Icon(
+                  isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                  color: Colors.white38,
+                  size: 20,
+                ),
+              ),
+            ),
+            if (isExpanded) ...[
+              const Gap(8),
+              _buildSubcategoriesAccordion(category, relatedPayments),
+            ],
+          ],
         );
       },
+    );
+  }
+
+  Widget _buildSubcategoriesAccordion(Category category, List<Payment> relatedPayments) {
+    final subcats = category.subcategories;
+
+    if (subcats.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.04)),
+        ),
+        child: Text(
+          'No subcategories added yet',
+          style: GoogleFonts.montserrat(
+            color: Colors.white38,
+            fontSize: 12,
+            fontStyle: FontStyle.italic,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.04)),
+      ),
+      child: Column(
+        children: List.generate(subcats.length, (index) {
+          final sub = subcats[index];
+          final subcatPayments = relatedPayments
+              .where((p) => p.subcategoryId == sub.id)
+              .toList();
+          final subcatTotal = subcatPayments.fold<double>(0, (sum, p) => sum + p.amount);
+          final subcatCount = subcatPayments.length;
+
+          return Column(
+            children: [
+              GestureDetector(
+                onLongPress: () =>
+                    _showDeleteSubcategorySheet(sub, subcatCount, subcatPayments),
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      Container(
+                        height: 38,
+                        width: 38,
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withOpacity(0.05)),
+                        ),
+                        padding: const EdgeInsets.all(8),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            child: SvgPicture.string(
+                              sub.svgIcon,
+                              colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Gap(12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              sub.label,
+                              style: GoogleFonts.montserrat(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              subcatCount > 0
+                                  ? '$subcatCount transaction${subcatCount == 1 ? '' : 's'}'
+                                  : 'No transactions',
+                              style: GoogleFonts.montserrat(
+                                color: Colors.white38,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (subcatCount > 0)
+                        Text(
+                          CurrencyUtils.format(subcatTotal),
+                          style: GoogleFonts.montserrat(
+                            color: Colors.white70,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              if (index < subcats.length - 1)
+                Divider(
+                  color: Colors.white.withOpacity(0.05),
+                  height: 1,
+                  indent: 12,
+                  endIndent: 12,
+                ),
+            ],
+          );
+        }),
+      ),
     );
   }
 
@@ -198,8 +346,6 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
     int paymentCount,
     List<Payment> relatedPayments,
   ) {
-    final isPredefined = category.isPredefined;
-
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -240,51 +386,38 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
               ),
             ),
             const Gap(24),
-            if (isPredefined)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Text(
-                  'Built-in categories cannot be deleted.',
-                  style: GoogleFonts.montserrat(
-                    color: AppColors.warningYellow,
-                    fontSize: 13,
-                  ),
-                ),
-              )
-            else ...[
-              if (paymentCount > 0) ...[
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _showReassignDialog(category, relatedPayments);
-                    },
-                    icon: const Icon(Icons.swap_horiz, size: 18),
-                    label: const Text('Move & Delete'),
-                  ),
-                ),
-                const Gap(12),
-              ],
+            if (paymentCount > 0) ...[
               SizedBox(
                 width: double.infinity,
                 height: 48,
-                child: ElevatedButton.icon(
+                child: OutlinedButton.icon(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    _confirmAndDelete(category, relatedPayments);
+                    _showReassignDialog(category, relatedPayments);
                   },
-                  icon: const Icon(Icons.delete_outline, size: 18),
-                  label: Text(
-                    paymentCount > 0 ? 'Delete Anyway' : 'Delete Category',
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.errorRed,
-                  ),
+                  icon: const Icon(Icons.swap_horiz, size: 18),
+                  label: const Text('Move & Delete'),
                 ),
               ),
+              const Gap(12),
             ],
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _confirmAndDelete(category, relatedPayments);
+                },
+                icon: const Icon(Icons.delete_outline, size: 18),
+                label: Text(
+                  paymentCount > 0 ? 'Delete Anyway' : 'Delete Category',
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.errorRed,
+                ),
+              ),
+            ),
             const Gap(8),
           ],
         ),
@@ -447,6 +580,125 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
     );
   }
 
+  void _showDeleteSubcategorySheet(
+    SubCategory subcategory,
+    int paymentCount,
+    List<Payment> relatedPayments,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Gap(20),
+            Text(
+              subcategory.label,
+              style: GoogleFonts.montserrat(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const Gap(8),
+            Text(
+              paymentCount > 0
+                  ? '$paymentCount transaction${paymentCount == 1 ? '' : 's'} linked'
+                  : 'No transactions linked',
+              style: GoogleFonts.montserrat(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+            const Gap(24),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _confirmAndDeleteSubcategory(subcategory, relatedPayments);
+                },
+                icon: const Icon(Icons.delete_outline, size: 18),
+                label: Text(
+                  paymentCount > 0 ? 'Delete Anyway' : 'Delete Subcategory',
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.errorRed,
+                ),
+              ),
+            ),
+            const Gap(8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmAndDeleteSubcategory(SubCategory subcategory, List<Payment> relatedPayments) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          'Delete "${subcategory.label}"?',
+          style: GoogleFonts.montserrat(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          relatedPayments.isNotEmpty
+              ? 'This will remove the subcategory. ${relatedPayments.length} transaction${relatedPayments.length == 1 ? '' : 's'} will lose their subcategory label.'
+              : 'This subcategory has no transactions. It will be permanently removed.',
+          style: GoogleFonts.montserrat(
+            color: AppColors.textSecondary,
+            fontSize: 13,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ref
+                  .read(categoriesProvider.notifier)
+                  .deleteSubcategory(subcategory.id!);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('"${subcategory.label}" deleted')),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.errorRed,
+            ),
+            child: const Text('DELETE'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ---------------- TILE ----------------
 
   Widget _itemTile({
@@ -455,25 +707,29 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
     required String amount,
     required bool highlight,
     String? iconPath,
-    String? categoryIcon,
-    String? customSvg,
+    String? svgIcon,
     double? progress,
     Color? progressColor,
     Color? amountColor,
+    Widget? trailing,
   }) {
-    final themeColor = PredefinedCategories.getColor(categoryIcon);
-    final hasCustomSvg = customSvg != null && customSvg.trim().isNotEmpty;
-    final isSvgAsset =
-        iconPath != null && iconPath.toLowerCase().endsWith('.svg');
+    final themeColor = AppColors.primaryNeon;
 
     Widget buildIcon() {
-      if (hasCustomSvg) {
-        return SvgPicture.string(customSvg, width: 28, height: 28);
+      if (svgIcon != null && svgIcon.isNotEmpty) {
+        return SizedBox(
+          width: 28,
+          height: 28,
+          child: FittedBox(
+            fit: BoxFit.contain,
+            child: SvgPicture.string(
+              svgIcon,
+              colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+            ),
+          ),
+        );
       }
       if (iconPath != null) {
-        if (isSvgAsset) {
-          return SvgPicture.asset(iconPath, width: 28, height: 28);
-        }
         return Image.asset(iconPath, width: 28, height: 28);
       }
       return Icon(Icons.payment, color: themeColor, size: 24);
@@ -499,7 +755,7 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
                 width: 48,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.background,
+                  color: Colors.black,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: buildIcon(),
@@ -538,6 +794,10 @@ class _CustomTabWidgetState extends ConsumerState<CustomTabWidget> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+              if (trailing != null) ...[
+                const Gap(12),
+                trailing,
+              ],
             ],
           ),
           if (progress != null) ...[

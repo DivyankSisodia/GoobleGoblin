@@ -241,9 +241,9 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsState> {
       final cutoff = now.add(const Duration(days: 30));
 
       for (final p in recurring) {
-        final catId = p.categoryId;
+        final catId = p.categoryId ?? 0;
         final catName = p.category?.label ?? 'Uncategorized';
-        final catIcon = p.category?.icon ?? 'category';
+        final catIcon = p.category?.svgIcon ?? p.subcategory?.svgIcon ?? '';
         grouped[catId] ??= {
           'name': catName,
           'icon': catIcon,
@@ -345,7 +345,7 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsState> {
       final note = payment.note?.toLowerCase() ?? '';
       if (note.isEmpty) continue;
 
-      for (final keyword in PredefinedCategories.transactionNoteKeywords) {
+      for (final keyword in DefaultCategories.transactionNoteKeywords) {
         if (!note.contains(keyword)) continue;
         final current = grouped[keyword] ?? (amount: 0.0, count: 0);
         grouped[keyword] = (

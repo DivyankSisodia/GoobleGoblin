@@ -17,6 +17,7 @@ import '../../../providers/providers.dart';
 import '../../cards/widget/card_preview_widget.dart';
 import '../../main_screen.dart';
 import '../widgets/add_category_sheet.dart';
+import '../widgets/add_subcategory_sheet.dart';
 import '../widgets/amount_widget.dart';
 import '../widgets/custom_date_widget.dart';
 import '../widgets/frequency_dropdown.dart';
@@ -40,6 +41,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
 
   DateTime _selectedDate = DateTime.now();
   int? _selectedCategoryId;
+  int? _selectedSubcategoryId;
   int? _selectedCardId;
 
   bool _isRecurring = false;
@@ -58,6 +60,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
       _descriptionController.text = p.note ?? '';
       _selectedDate = AppDateUtils.parseIso(p.date) ?? DateTime.now();
       _selectedCategoryId = p.categoryId;
+      _selectedSubcategoryId = p.subcategoryId;
       _selectedCardId = p.cardId;
       _isRecurring = p.isRecurring;
       _selectedFrequency = p.frequency ?? 'Monthly';
@@ -88,11 +91,8 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
   }
 
   void _preSelectDefaults() {
-    final categories = ref.read(categoriesProvider).categories;
-    if (categories.isNotEmpty) {
-      setState(() => _selectedCategoryId = categories.first.id);
-    }
-
+    // We do not pre-select category here anymore.
+    
     final cards = ref.read(cardsProvider).cards;
     if (cards.isNotEmpty) {
       final primary =
@@ -143,6 +143,41 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
     );
   }
 
+  Future<void> _showAddSubcategorySheet() async {
+    if (_selectedCategoryId == null) return;
+    
+    final category = ref.read(categoriesProvider).getCategoryById(_selectedCategoryId!);
+    if (category == null) return;
+
+    final subcategory = await showModalBottomSheet<SubCategory>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AddSubcategorySheet(categoryId: _selectedCategoryId!, existingSubcategories: category.subcategories),
+    );
+
+    if (subcategory == null) return;
+
+    final success = await ref.read(categoriesProvider.notifier).addSubcategory(subcategory);
+    
+    if (!mounted) return;
+
+    if (!success) {
+      _showError(ref.read(categoriesProvider).errorMessage ?? 'Failed to add subcategory');
+      return;
+    }
+
+    final updatedCat = ref.read(categoriesProvider).getCategoryById(_selectedCategoryId!);
+    final addedSub = updatedCat?.subcategories.where((s) => s.label == subcategory.label).firstOrNull;
+    if (addedSub != null) {
+      setState(() => _selectedSubcategoryId = addedSub.id);
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${subcategory.label} added to subcategories')),
+    );
+  }
+
   @override
   void dispose() {
     _amountController.dispose();
@@ -182,6 +217,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
         date: _selectedDate.toIso8601String(), // Use full ISO with time
         cardId: _selectedCardId!,
         categoryId: _selectedCategoryId!,
+        subcategoryId: _selectedSubcategoryId,
         isRecurring: _isRecurring,
         frequency: _isRecurring ? _selectedFrequency : null,
         reminderNotification: _isReminderEnabled,
@@ -294,14 +330,8 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
   Widget build(BuildContext context) {
     final cards = ref.watch(cardsProvider).cards;
     final categoriesState = ref.watch(categoriesProvider);
-    final categories = categoriesState.categories;
 
-    if (categories.isNotEmpty && _selectedCategoryId == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _selectedCategoryId != null) return;
-        setState(() => _selectedCategoryId = categories.first.id);
-      });
-    }
+    // We do not pre-select category anymore here either.
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -401,9 +431,14 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
             PaymentCategorySection(
               categoriesState: categoriesState,
               selectedCategoryId: _selectedCategoryId,
-              onCategorySelected: (id) =>
-                  setState(() => _selectedCategoryId = id),
+              selectedSubcategoryId: _selectedSubcategoryId,
+              onCategorySelected: (id) => setState(() {
+                _selectedCategoryId = id;
+                _selectedSubcategoryId = null;
+              }),
+              onSubcategorySelected: (id) => setState(() => _selectedSubcategoryId = id),
               onAddCategory: _showAddCategorySheet,
+              onAddSubcategory: _showAddSubcategorySheet,
               onReloadCategories: _repairCategoriesIfNeeded,
             ),
             const Gap(32),

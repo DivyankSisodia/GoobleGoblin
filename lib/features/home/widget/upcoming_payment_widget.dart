@@ -7,7 +7,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/models/payment.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_utils.dart';
-import '../../../core/models/category.dart';
 import '../../payment/screen/new_payment_screen.dart';
 
 class UpcomingPaymentWidget extends ConsumerWidget {
@@ -16,24 +15,28 @@ class UpcomingPaymentWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Determine category accent color
-    final categoryColor = PredefinedCategories.getColor(payment.category?.icon);
+    final categoryColor = AppColors.primaryNeon;
     final category = payment.category;
-    final assetPath = category?.assetPath;
-    final customSvg = category?.customSvg;
-    final hasCustomSvg = customSvg != null && customSvg.trim().isNotEmpty;
-    final isSvgAsset =
-        assetPath != null && assetPath.toLowerCase().endsWith('.svg');
+    final subcat = payment.subcategory;
+    
+    final iconString = subcat != null && subcat.svgIcon.isNotEmpty
+        ? subcat.svgIcon
+        : category?.svgIcon;
+    final hasSvgIcon = iconString != null && iconString.trim().isNotEmpty;
 
     Widget buildIcon() {
-      if (hasCustomSvg) {
-        return SvgPicture.string(customSvg, width: 30, height: 30);
-      }
-      if (assetPath != null) {
-        if (isSvgAsset) {
-          return SvgPicture.asset(assetPath, width: 30, height: 30);
-        }
-        return Image.asset(assetPath, width: 30, height: 30);
+      if (hasSvgIcon) {
+        return SizedBox(
+          width: 30,
+          height: 30,
+          child: FittedBox(
+            fit: BoxFit.contain,
+            child: SvgPicture.string(
+              iconString,
+              colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+            ),
+          ),
+        );
       }
       return Icon(Icons.payments_outlined, color: categoryColor, size: 24);
     }
@@ -72,7 +75,7 @@ class UpcomingPaymentWidget extends ConsumerWidget {
               width: 50,
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppColors.background,
+                color: Colors.black,
                 borderRadius: BorderRadius.circular(18),
               ),
               child: buildIcon(),
@@ -94,7 +97,9 @@ class UpcomingPaymentWidget extends ConsumerWidget {
                   ),
                 ),
                 Text(
-                  payment.category?.label ?? 'Other Payment',
+                  subcat != null
+                      ? '${payment.category?.label ?? 'Other Payment'} • ${subcat.label}'
+                      : (payment.category?.label ?? 'Other Payment'),
                   style: GoogleFonts.montserrat(
                     color: Colors.white70,
                     fontSize: 11,

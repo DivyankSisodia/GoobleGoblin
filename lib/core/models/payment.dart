@@ -6,14 +6,17 @@ class Payment {
   final double amount;
   final String date;
   final int cardId;
-  final int categoryId;
+  final int? categoryId;
+  final int? subcategoryId;
   final bool isRecurring;
   final String? frequency;
   final bool reminderNotification;
   final String? note;
   final String? createdAt;
   final String? updatedAt;
+  
   final Category? category;
+  final SubCategory? subcategory;
 
   // Controls whether this transaction deducts from card balance
   final bool isExternalTransaction;
@@ -25,6 +28,7 @@ class Payment {
   final String? uuid;
   final String? cardUuid;
   final String? categoryUuid;
+  final String? subcategoryUuid;
   final SyncStatus syncStatus;
   final String? lastSyncedAt;
   final bool isDeleted;
@@ -34,7 +38,8 @@ class Payment {
     required this.amount,
     required this.date,
     required this.cardId,
-    required this.categoryId,
+    this.categoryId,
+    this.subcategoryId,
     required this.isRecurring,
     this.frequency,
     required this.reminderNotification,
@@ -42,9 +47,11 @@ class Payment {
     this.createdAt,
     this.updatedAt,
     this.category,
+    this.subcategory,
     this.uuid,
     this.cardUuid,
     this.categoryUuid,
+    this.subcategoryUuid,
     this.isExternalTransaction = false,
     this.isIncome = false,
     this.syncStatus = SyncStatus.pendingCreate,
@@ -58,6 +65,7 @@ class Payment {
     'date': date,
     'cardId': cardId,
     'categoryId': categoryId,
+    'subcategoryId': subcategoryId,
     'isRecurring': isRecurring ? 1 : 0,
     'frequency': frequency,
     'reminderNotification': reminderNotification ? 1 : 0,
@@ -66,6 +74,7 @@ class Payment {
     'uuid': uuid,
     'cardUuid': cardUuid,
     'categoryUuid': categoryUuid,
+    'subcategoryUuid': subcategoryUuid,
     'isExternalTransaction': isExternalTransaction ? 1 : 0,
     'isIncome': isIncome ? 1 : 0,
     'syncStatus': syncStatus.dbValue,
@@ -79,6 +88,7 @@ class Payment {
     date: map['date'],
     cardId: map['cardId'],
     categoryId: map['categoryId'],
+    subcategoryId: map['subcategoryId'],
     isRecurring: map['isRecurring'] == 1,
     frequency: map['frequency'],
     reminderNotification: map['reminderNotification'] == 1,
@@ -87,6 +97,7 @@ class Payment {
     uuid: map['uuid'],
     cardUuid: map['cardUuid'],
     categoryUuid: map['categoryUuid'],
+    subcategoryUuid: map['subcategoryUuid'],
     syncStatus: SyncStatus.fromString(map['syncStatus']),
     lastSyncedAt: map['lastSyncedAt'],
     isExternalTransaction: (map['isExternalTransaction'] ?? 0) == 1,
@@ -96,9 +107,15 @@ class Payment {
         ? Category(
             id: map['categoryId'],
             label: map['category_label'],
-            icon: map['category_icon'] ?? '',
-            assetPath: map['category_asset'],
-            customSvg: map['category_customSvg'],
+            svgIcon: map['category_svgIcon'] ?? '',
+          )
+        : null,
+    subcategory: map['subcategory_label'] != null
+        ? SubCategory(
+            id: map['subcategoryId'],
+            categoryId: map['categoryId'] ?? 0,
+            label: map['subcategory_label'],
+            svgIcon: map['subcategory_svgIcon'] ?? '',
           )
         : null,
   );
@@ -112,13 +129,11 @@ Payment(
   date: $date,
   cardId: $cardId,
   categoryId: $categoryId,
+  subcategoryId: $subcategoryId,
   isRecurring: $isRecurring,
-  frequency: $frequency,
-  reminderNotification: $reminderNotification,
   note: $note,
-  createdAt: $createdAt,
   category: $category,
-  isIncome: $isIncome,
+  subcategory: $subcategory,
 )
 ''';
   }
@@ -129,6 +144,7 @@ Payment(
     String? date,
     int? cardId,
     int? categoryId,
+    int? subcategoryId,
     bool? isRecurring,
     String? frequency,
     bool? reminderNotification,
@@ -136,11 +152,13 @@ Payment(
     String? createdAt,
     String? updatedAt,
     Category? category,
+    SubCategory? subcategory,
     bool? isExternalTransaction,
     bool? isIncome,
     String? uuid,
     String? cardUuid,
     String? categoryUuid,
+    String? subcategoryUuid,
     SyncStatus? syncStatus,
     String? lastSyncedAt,
     bool? isDeleted,
@@ -151,6 +169,7 @@ Payment(
       date: date ?? this.date,
       cardId: cardId ?? this.cardId,
       categoryId: categoryId ?? this.categoryId,
+      subcategoryId: subcategoryId ?? this.subcategoryId,
       isRecurring: isRecurring ?? this.isRecurring,
       frequency: frequency ?? this.frequency,
       reminderNotification: reminderNotification ?? this.reminderNotification,
@@ -158,12 +177,13 @@ Payment(
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       category: category ?? this.category,
-      isExternalTransaction:
-          isExternalTransaction ?? this.isExternalTransaction,
+      subcategory: subcategory ?? this.subcategory,
+      isExternalTransaction: isExternalTransaction ?? this.isExternalTransaction,
       isIncome: isIncome ?? this.isIncome,
       uuid: uuid ?? this.uuid,
       cardUuid: cardUuid ?? this.cardUuid,
       categoryUuid: categoryUuid ?? this.categoryUuid,
+      subcategoryUuid: subcategoryUuid ?? this.subcategoryUuid,
       syncStatus: syncStatus ?? this.syncStatus,
       lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
       isDeleted: isDeleted ?? this.isDeleted,

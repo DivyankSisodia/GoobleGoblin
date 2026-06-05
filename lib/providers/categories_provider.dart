@@ -108,6 +108,24 @@ class CategoriesNotifier extends StateNotifier<CategoriesState> {
     return true;
   }
 
+  /// Add a new subcategory
+  Future<bool> addSubcategory(SubCategory subcategory) async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+
+    final result = await _repository.insertSubcategory(subcategory);
+
+    if (result.isLeft()) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: result.failureValue.message,
+      );
+      return false;
+    }
+
+    await loadCategories();
+    return true;
+  }
+
   /// Update an existing category
   Future<bool> updateCategory(Category category) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
@@ -132,6 +150,25 @@ class CategoriesNotifier extends StateNotifier<CategoriesState> {
     state = state.copyWith(isLoading: true, errorMessage: null);
 
     final result = await _repository.deleteCategory(id);
+
+    if (result.isLeft()) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: result.failureValue.message,
+      );
+      return false;
+    }
+
+    final success = result.getOrElse((_) => false);
+    await loadCategories();
+    return success;
+  }
+
+  /// Delete a subcategory
+  Future<bool> deleteSubcategory(int id) async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+
+    final result = await _repository.deleteSubcategory(id);
 
     if (result.isLeft()) {
       state = state.copyWith(

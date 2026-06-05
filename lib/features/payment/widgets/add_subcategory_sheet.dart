@@ -10,16 +10,17 @@ import '../../../core/theme/app_theme.dart';
 /// Tab for choosing icon source in the add-category sheet.
 enum _IconSource { template, customSvg }
 
-class AddCategorySheet extends StatefulWidget {
-  const AddCategorySheet({super.key, required this.existingCategories});
+class AddSubcategorySheet extends StatefulWidget {
+  const AddSubcategorySheet({super.key, required this.categoryId, required this.existingSubcategories});
 
-  final List<Category> existingCategories;
+  final int categoryId;
+  final List<SubCategory> existingSubcategories;
 
   @override
-  State<AddCategorySheet> createState() => _AddCategorySheetState();
+  State<AddSubcategorySheet> createState() => _AddSubcategorySheetState();
 }
 
-class _AddCategorySheetState extends State<AddCategorySheet> {
+class _AddSubcategorySheetState extends State<AddSubcategorySheet> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _svgController = TextEditingController();
   String _selectedTemplateIcon = DefaultCategories.all.first.svgIcon;
@@ -36,8 +37,8 @@ class _AddCategorySheetState extends State<AddCategorySheet> {
   Future<void> _submit() async {
     final rawLabel = _nameController.text.trim();
     final label = _formatLabel(rawLabel);
-    final existingLabels = widget.existingCategories
-        .map((category) => category.label.trim().toLowerCase())
+    final existingLabels = widget.existingSubcategories
+        .map((subcategory) => subcategory.label.trim().toLowerCase())
         .toSet();
 
     if (label.isEmpty) {
@@ -46,7 +47,7 @@ class _AddCategorySheetState extends State<AddCategorySheet> {
     }
 
     if (existingLabels.contains(label.toLowerCase())) {
-      setState(() => _errorText = 'That category already exists');
+      setState(() => _errorText = 'That subcategory already exists');
       return;
     }
 
@@ -73,7 +74,8 @@ class _AddCategorySheetState extends State<AddCategorySheet> {
       }
 
       Navigator.of(context).pop(
-        Category(
+        SubCategory(
+          categoryId: widget.categoryId,
           label: label,
           svgIcon: svg,
         ),
@@ -85,7 +87,8 @@ class _AddCategorySheetState extends State<AddCategorySheet> {
           DefaultCategories.all.first;
 
       Navigator.of(context).pop(
-        Category(
+        SubCategory(
+          categoryId: widget.categoryId,
           label: label,
           svgIcon: selectedTemplate.svgIcon,
         ),
@@ -142,7 +145,7 @@ class _AddCategorySheetState extends State<AddCategorySheet> {
             ),
             const Gap(22),
             Text(
-              'Add Category',
+              'Add Subcategory',
               style: GoogleFonts.montserrat(
                 color: Colors.white,
                 fontSize: 22,
@@ -232,7 +235,7 @@ class _AddCategorySheetState extends State<AddCategorySheet> {
               height: 54,
               child: ElevatedButton(
                 onPressed: canSave ? _submit : null,
-                child: const Text('CREATE CATEGORY'),
+                child: const Text('CREATE SUBCATEGORY'),
               ),
             ),
           ],

@@ -47,7 +47,7 @@ class CategoryRepositoryImpl implements CategoryRepository {
     // Validate category data
     final validation = Validators.validateCategory(
       label: category.label,
-      icon: category.icon,
+      svgIcon: category.svgIcon,
     );
 
     if (validation.isFailure) {
@@ -59,6 +59,17 @@ class CategoryRepositoryImpl implements CategoryRepository {
       return ResultHelper.success(id);
     } catch (e) {
       return ResultHelper.failure(DatabaseFailure.insertFailed('category', e));
+    }
+  }
+
+  @override
+  AsyncResult<int> insertSubcategory(SubCategory subcategory) async {
+    try {
+      final db = await _dbHelper.database;
+      final id = await db.insert('subcategories', subcategory.toMap());
+      return ResultHelper.success(id);
+    } catch (e) {
+      return ResultHelper.failure(DatabaseFailure.insertFailed('subcategory', e));
     }
   }
 
@@ -76,7 +87,7 @@ class CategoryRepositoryImpl implements CategoryRepository {
     // Validate category data
     final validation = Validators.validateCategory(
       label: category.label,
-      icon: category.icon,
+      svgIcon: category.svgIcon,
     );
 
     if (validation.isFailure) {
@@ -102,8 +113,18 @@ class CategoryRepositoryImpl implements CategoryRepository {
   }
 
   @override
+  AsyncResult<bool> deleteSubcategory(int id) async {
+    try {
+      final rowsAffected = await _dbHelper.deleteSubcategory(id);
+      return ResultHelper.success(rowsAffected > 0);
+    } catch (e) {
+      return ResultHelper.failure(DatabaseFailure.deleteFailed('subcategory', e));
+    }
+  }
+
+  @override
   List<Category> getDefaultCategories() {
-    return PredefinedCategories.all;
+    return DefaultCategories.all;
   }
 
   @override

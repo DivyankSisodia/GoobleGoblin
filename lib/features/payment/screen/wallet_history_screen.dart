@@ -669,7 +669,7 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
 
   Widget _buildTransactionTile(Payment payment, BankCard? card) {
     final cat = payment.category;
-    final categoryColor = PredefinedCategories.getColor(cat?.icon);
+    final subcat = payment.subcategory;
     final isIncome = payment.isIncome;
 
     // Income: green, Expense: white/red based
@@ -732,11 +732,11 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
               height: 52,
               width: 52,
               decoration: BoxDecoration(
-                color: AppColors.background,
+                color: Colors.black,
                 borderRadius: BorderRadius.circular(16),
               ),
               padding: const EdgeInsets.all(12),
-              child: _buildCategoryIcon(cat, categoryColor),
+              child: _buildPaymentIcon(cat, subcat, AppColors.primaryNeon),
             ),
             const Gap(16),
             Expanded(
@@ -757,7 +757,9 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
                   ),
                   const Gap(2),
                   Text(
-                    cat?.label ?? 'Other',
+                    subcat != null
+                        ? '${cat?.label ?? 'Other'} • ${subcat.label}'
+                        : (cat?.label ?? 'Other'),
                     style: GoogleFonts.montserrat(
                       color: AppColors.textSecondary,
                       fontSize: 12,
@@ -847,25 +849,25 @@ class _WalletHistoryScreenState extends ConsumerState<WalletHistoryScreen> {
     );
   }
 
-  Widget _buildCategoryIcon(Category? cat, Color fallbackColor) {
-    if (cat == null) {
+  Widget _buildPaymentIcon(Category? cat, SubCategory? subcat, Color fallbackColor) {
+    final iconString = subcat != null && subcat.svgIcon.isNotEmpty
+        ? subcat.svgIcon
+        : cat?.svgIcon;
+
+    if (iconString == null || iconString.isEmpty) {
       return Icon(Icons.payment, color: fallbackColor, size: 24);
     }
-    final assetPath = cat.assetPath;
-    // Custom inline SVG takes priority
-    if (cat.hasCustomSvg) {
-      return SvgPicture.string(cat.customSvg!, width: 28, height: 28);
-    }
-    // Asset path with SVG extension
-    if (assetPath != null && assetPath.toLowerCase().endsWith('.svg')) {
-      return SvgPicture.asset(assetPath, width: 28, height: 28);
-    }
-    // Asset path (PNG / raster)
-    if (assetPath != null) {
-      return Image.asset(assetPath, width: 28, height: 28);
-    }
-    // Fallback icon
-    return Icon(Icons.payment, color: fallbackColor, size: 24);
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: FittedBox(
+        fit: BoxFit.contain,
+        child: SvgPicture.string(
+          iconString,
+          colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+        ),
+      ),
+    );
   }
 
   void _confirmDeletePayment(Payment payment) {
