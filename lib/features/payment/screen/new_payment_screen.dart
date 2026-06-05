@@ -46,9 +46,10 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
 
   bool _isRecurring = false;
   String _selectedFrequency = 'Monthly';
-  bool _isReminderEnabled = true; // Default to true for scheduled payments
+  bool _isReminderEnabled = true;
   bool _isExternalTransaction = false;
-  bool _showDatePicker = false; // Controls visibility of date picker
+  bool _isIncome = false;
+  bool _showDatePicker = false;
 
   @override
   void initState() {
@@ -66,6 +67,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
       _selectedFrequency = p.frequency ?? 'Monthly';
       _isReminderEnabled = p.reminderNotification;
       _isExternalTransaction = p.isExternalTransaction;
+      _isIncome = p.isIncome;
       // When editing, show date picker since a date was already chosen
       _showDatePicker = true;
     } else if (widget.fromWishlist != null) {
@@ -223,6 +225,7 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
         reminderNotification: _isReminderEnabled,
         note: _descriptionController.text.trim(),
         isExternalTransaction: _isExternalTransaction,
+        isIncome: _isIncome,
         createdAt:
             widget.paymentToEdit?.createdAt ?? DateTime.now().toIso8601String(),
       );
@@ -527,6 +530,9 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
             const Gap(16),
             _buildExternalTransactionToggle(),
 
+            const Gap(16),
+            _buildIncomeToggle(),
+
             const Gap(40),
             _buildSaveButton(),
             const Gap(60),
@@ -664,6 +670,56 @@ class _NewPaymentScreenState extends ConsumerState<NewPaymentScreen> {
               value: _isExternalTransaction,
               activeColor: AppColors.primaryNeon,
               onChanged: (val) => setState(() => _isExternalTransaction = val),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIncomeToggle() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceLight.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+            color: _isIncome
+                ? AppColors.successGreen.withValues(alpha: 0.4)
+                : Colors.white.withValues(alpha: 0.05),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Income / Money Received',
+                    style: GoogleFonts.montserrat(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Gap(4),
+                  Text(
+                    'Mark as money received (shown as +amount\nin green)',
+                    style: GoogleFonts.montserrat(
+                      color: Colors.white54,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            CupertinoSwitch(
+              value: _isIncome,
+              activeColor: AppColors.successGreen,
+              onChanged: (val) => setState(() => _isIncome = val),
             ),
           ],
         ),

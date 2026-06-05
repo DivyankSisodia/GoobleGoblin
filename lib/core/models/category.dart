@@ -166,6 +166,12 @@ class DefaultCategories {
       subcategories: [
         SubCategory(categoryId: 0, label: 'Zomato', svgIcon: AppIcons.zomato),
         SubCategory(categoryId: 0, label: 'Swiggy', svgIcon: AppIcons.swiggy),
+        SubCategory(categoryId: 0, label: 'Amazon', svgIcon: AppIcons.amazon),
+        SubCategory(categoryId: 0, label: 'Zepto', svgIcon: AppIcons.zepto),
+        SubCategory(categoryId: 0, label: 'Essentials', svgIcon: AppIcons.essentials),
+        SubCategory(categoryId: 0, label: 'Tiffin', svgIcon: AppIcons.tiffin),
+        SubCategory(categoryId: 0, label: 'Party', svgIcon: AppIcons.party),
+        SubCategory(categoryId: 0, label: 'Flipkart', svgIcon: AppIcons.flipkart),
       ]
     ),
     Category(
@@ -175,6 +181,7 @@ class DefaultCategories {
       subcategories: [
         SubCategory(categoryId: 0, label: 'Rent', svgIcon: AppIcons.rent),
         SubCategory(categoryId: 0, label: 'Electricity', svgIcon: AppIcons.electricity),
+        SubCategory(categoryId: 0, label: 'Loan', svgIcon: AppIcons.loan),
       ]
     ),
     Category(
@@ -184,6 +191,9 @@ class DefaultCategories {
       subcategories: [
         SubCategory(categoryId: 0, label: 'Mobile', svgIcon: AppIcons.mobile),
         SubCategory(categoryId: 0, label: 'WiFi', svgIcon: AppIcons.wifi),
+        SubCategory(categoryId: 0, label: 'Netflix', svgIcon: AppIcons.netflix),
+        SubCategory(categoryId: 0, label: 'Spotify', svgIcon: AppIcons.spotify),
+        SubCategory(categoryId: 0, label: 'Llm', svgIcon: AppIcons.llm),
       ]
     ),
     Category(
@@ -195,15 +205,25 @@ class DefaultCategories {
       label: 'Shopping',
       svgIcon: AppIcons.shopping,
       color: Color(0xFF9B59B6),
+      subcategories: [
+        SubCategory(categoryId: 0, label: 'Amazon', svgIcon: AppIcons.amazon),
+        SubCategory(categoryId: 0, label: 'Flipkart', svgIcon: AppIcons.flipkart),
+      ]
     ),
     Category(
       label: 'Miscellaneous',
       svgIcon: AppIcons.miscellaneous,
       color: Color(0xFF95A5A6),
+      subcategories: [
+        SubCategory(categoryId: 0, label: 'Loan', svgIcon: AppIcons.loan),
+        SubCategory(categoryId: 0, label: 'Money Transfer', svgIcon: AppIcons.moneyTransfer),
+      ]
     ),
   ];
 
   static const List<String> transactionNoteKeywords = [
-    'amazon', 'flipkart', 'swiggy', 'zomato', 'uber', 'ola', 'netflix', 'spotify'
+    'amazon', 'flipkart', 'swiggy', 'zomato', 'uber', 'ola', 'netflix', 'spotify',
+    'zepto', 'cred', 'github', 'furlenco', 'icici', 'hdfc', 'paytm', 'phonepe',
+    'gpay', 'google', 'electricity', 'rent', 'loan', 'emi', 'salary',
   ];
 }

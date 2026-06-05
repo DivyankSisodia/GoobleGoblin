@@ -9,6 +9,7 @@ import '../../../core/utils/date_utils.dart';
 import '../../../data/repositories/payment_repository.dart';
 import '../../../providers/analytics_provider.dart';
 import '../widgets/category_flow_widget.dart';
+import '../widgets/income_expense_chart.dart';
 import '../widgets/pulse_indicator.dart';
 import '../widgets/spending_flow_card.dart';
 import '../widgets/spending_heatmap.dart';
@@ -193,6 +194,20 @@ class AnalyticsScreen extends ConsumerWidget {
 
               const SliverToBoxAdapter(child: Gap(24)),
 
+              // Income vs Expense Chart
+              if (analyticsState.incomeExpenseData.isNotEmpty) ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: IncomeExpenseChart(
+                      data: analyticsState.incomeExpenseData,
+                      totalIncome: analyticsState.totalIncome,
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(child: Gap(24)),
+              ],
+
               if (analyticsState.noteKeywordData.isNotEmpty) ...[
                 SliverToBoxAdapter(
                   child: Padding(
@@ -351,6 +366,35 @@ class AnalyticsScreen extends ConsumerWidget {
                       color: Colors.white,
                     ),
                   ),
+                  if (state.totalIncome > 0) ...[
+                    const Gap(8),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.successGreen.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.arrow_downward_rounded, color: AppColors.successGreen, size: 14),
+                              const Gap(4),
+                              Text(
+                                '+${CurrencyUtils.formatCompact(state.totalIncome)} income',
+                                style: GoogleFonts.montserrat(
+                                  fontSize: 11,
+                                  color: AppColors.successGreen,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
               // Trend indicator

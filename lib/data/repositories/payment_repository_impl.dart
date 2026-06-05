@@ -29,7 +29,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
       final db = await _dbHelper.database;
       final result = await db.rawQuery(
         '''
-        SELECT p.*, c.label as category_label, c.icon as category_icon
+        SELECT p.*, c.label as category_label, c.svgIcon as category_icon
         FROM payments p
         LEFT JOIN categories c ON p.categoryId = c.id
         WHERE p.id = ?
@@ -116,7 +116,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
       final db = await _dbHelper.database;
       final result = await db.rawQuery(
         '''
-        SELECT p.*, c.label as category_label, c.icon as category_icon
+        SELECT p.*, c.label as category_label, c.svgIcon as category_icon
         FROM payments p
         LEFT JOIN categories c ON p.categoryId = c.id
         WHERE p.categoryId = ?
@@ -140,7 +140,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
       final db = await _dbHelper.database;
       final result = await db.rawQuery(
         '''
-        SELECT p.*, c.label as category_label, c.icon as category_icon
+        SELECT p.*, c.label as category_label, c.svgIcon as category_icon
         FROM payments p
         LEFT JOIN categories c ON p.categoryId = c.id
         WHERE p.cardId = ?
@@ -179,7 +179,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
       final db = await _dbHelper.database;
       final result = await db.rawQuery(
         '''
-        SELECT p.*, c.label as category_label, c.icon as category_icon
+        SELECT p.*, c.label as category_label, c.svgIcon as category_icon
         FROM payments p
         LEFT JOIN categories c ON p.categoryId = c.id
         WHERE date(p.date) BETWEEN date(?) AND date(?)
@@ -235,7 +235,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
       final result = await db.rawQuery('''
         SELECT 
           date(date) as day,
-          SUM(amount) as total,
+          SUM(CASE WHEN isIncome = 0 THEN amount ELSE 0 END) as total,
           COUNT(*) as count
         FROM payments
         WHERE date >= date('now', '-$days days')
@@ -301,13 +301,14 @@ class PaymentRepositoryImpl implements PaymentRepository {
         SELECT 
           COALESCE(c.id, 0) as categoryId,
           COALESCE(c.label, 'Uncategorized') as categoryName,
-          COALESCE(c.icon, 'category') as categoryIcon,
-          SUM(p.amount) as totalAmount,
+          COALESCE(c.svgIcon, 'category') as categoryIcon,
+          SUM(CASE WHEN p.isIncome = 0 THEN p.amount ELSE 0 END) as totalAmount,
           COUNT(p.id) as transactionCount
         FROM payments p
         LEFT JOIN categories c ON p.categoryId = c.id
         WHERE $filteredWhereClause
         GROUP BY p.categoryId
+        HAVING totalAmount > 0
         ORDER BY totalAmount DESC
       ''', whereArgs);
 
@@ -345,12 +346,12 @@ class PaymentRepositoryImpl implements PaymentRepository {
       final startStr = AppDateUtils.formatIso(start);
       final endStr = AppDateUtils.formatIso(end);
 
-      // Get basic stats
+// Get basic stats (expenses only)
       final statsResult = await db.rawQuery(
         '''
         SELECT 
-          COALESCE(SUM(amount), 0) as totalSpending,
-          COALESCE(AVG(amount), 0) as avgTransaction,
+          COALESCE(SUM(CASE WHEN isIncome = 0 THEN amount ELSE 0 END), 0) as totalSpending,
+          COALESCE(AVG(CASE WHEN isIncome = 0 THEN amount ELSE NULL END), 0) as avgTransaction,
           COUNT(*) as transactionCount
         FROM payments
         WHERE date(date) BETWEEN date(?) AND date(?)
@@ -385,12 +386,12 @@ class PaymentRepositoryImpl implements PaymentRepository {
         }
       }
 
-      // Get daily spending
+      // Get daily spending (expenses only)
       final dailyResult = await db.rawQuery(
         '''
         SELECT 
           date(date) as day,
-          SUM(amount) as total
+          SUM(CASE WHEN isIncome = 0 THEN amount ELSE 0 END) as total
         FROM payments
         WHERE date(date) BETWEEN date(?) AND date(?)
           AND isDeleted = 0
@@ -406,11 +407,11 @@ class PaymentRepositoryImpl implements PaymentRepository {
             (row['total'] as num?)?.toDouble() ?? 0.0;
       }
 
-      // Get monthly spending
+      // Get monthly spending (expenses only)
       final monthlyResult = await db.rawQuery('''
         SELECT 
           strftime('%Y-%m', date) as month,
-          SUM(amount) as total
+          SUM(CASE WHEN isIncome = 0 THEN amount ELSE 0 END) as total
         FROM payments
         WHERE date(date) >= date('now', '-12 months')
           AND isDeleted = 0
@@ -432,7 +433,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
 
       final previousResult = await db.rawQuery(
         '''
-        SELECT COALESCE(SUM(amount), 0) as total
+        SELECT COALESCE(SUM(CASE WHEN isIncome = 0 THEN amount ELSE 0 END), 0) as total
         FROM payments
         WHERE date(date) BETWEEN date(?) AND date(?)
           AND isDeleted = 0
@@ -477,7 +478,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
 
       final result = await db.rawQuery(
         '''
-        SELECT p.*, c.label as category_label, c.icon as category_icon
+        SELECT p.*, c.label as category_label, c.svgIcon as category_icon
         FROM payments p
         LEFT JOIN categories c ON p.categoryId = c.id
         WHERE p.note LIKE ? OR c.label LIKE ?

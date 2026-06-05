@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/db/bank_statement_import.dart';
 import '../../core/models/card.dart';
 import '../../data/repositories/card_repository.dart';
 import '../../data/repositories/card_repository_impl.dart';
+import 'payments_provider.dart';
 
 /// Provider for CardRepository
 final cardRepositoryProvider = Provider<CardRepository>((ref) {
@@ -81,8 +83,10 @@ class CardsState {
 /// Cards notifier using modern Riverpod patterns
 class CardsNotifier extends StateNotifier<CardsState> {
   final CardRepository _repository;
+  final Ref _ref;
+  static bool _bankImportDone = false;
 
-  CardsNotifier(this._repository, Ref ref) : super(const CardsState()) {
+  CardsNotifier(this._repository, this._ref) : super(const CardsState()) {
     loadCards();
   }
 
@@ -98,8 +102,19 @@ class CardsNotifier extends StateNotifier<CardsState> {
       },
       (cards) {
         state = state.copyWith(cards: cards, isLoading: false);
+        _tryBankImport();
       },
     );
+  }
+
+  Future<void> _tryBankImport() async {
+    if (_bankImportDone) return;
+    _bankImportDone = true;
+    try {
+      await BankStatementImport.importIfNeeded();
+      await loadCards();
+      _ref.read(paymentsProvider.notifier).loadPayments();
+    } catch (_) {}
   }
 
   /// Add a new card

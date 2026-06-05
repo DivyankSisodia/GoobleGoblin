@@ -13,10 +13,8 @@ import 'features/onboarding/screens/onboarding_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize notifications
   await NotificationService.instance.init();
 
-  // Initialize Database on startup
   await DatabaseHelper.instance.database;
   await DatabaseHelper.instance.seedPredefinedCategories();
 

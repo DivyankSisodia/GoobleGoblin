@@ -86,6 +86,19 @@ class NoteKeywordSpendingData {
   });
 }
 
+/// Monthly income vs expense data point for graphs.
+class IncomeExpenseMonth {
+  final String month;
+  final double income;
+  final double expense;
+
+  const IncomeExpenseMonth({
+    required this.month,
+    required this.income,
+    required this.expense,
+  });
+}
+
 /// State for analytics
 class AnalyticsState {
   final SpendingAnalytics? analytics;
@@ -105,6 +118,12 @@ class AnalyticsState {
   /// Number of upcoming recurring payment occurrences within the next 30 days
   final int upcomingRecurringCount;
 
+  /// Monthly income vs expense data for graphs
+  final List<IncomeExpenseMonth> incomeExpenseData;
+
+  /// Total income for the selected period
+  final double totalIncome;
+
   const AnalyticsState({
     this.analytics,
     this.categoryData = const [],
@@ -116,6 +135,8 @@ class AnalyticsState {
     this.recurringCategoryData = const [],
     this.scheduledFutureTotal = 0,
     this.upcomingRecurringCount = 0,
+    this.incomeExpenseData = const [],
+    this.totalIncome = 0,
   });
 
   AnalyticsState copyWith({
@@ -129,6 +150,8 @@ class AnalyticsState {
     List<CategorySpendingData>? recurringCategoryData,
     double? scheduledFutureTotal,
     int? upcomingRecurringCount,
+    List<IncomeExpenseMonth>? incomeExpenseData,
+    double? totalIncome,
   }) {
     return AnalyticsState(
       analytics: analytics ?? this.analytics,
@@ -143,6 +166,8 @@ class AnalyticsState {
       scheduledFutureTotal: scheduledFutureTotal ?? this.scheduledFutureTotal,
       upcomingRecurringCount:
           upcomingRecurringCount ?? this.upcomingRecurringCount,
+      incomeExpenseData: incomeExpenseData ?? this.incomeExpenseData,
+      totalIncome: totalIncome ?? this.totalIncome,
     );
   }
 
@@ -284,6 +309,8 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsState> {
     // Compute future-dated scheduled one-time payments total
     double scheduledFutureTotal = 0;
     List<NoteKeywordSpendingData> noteKeywordList = [];
+    double totalIncome = 0;
+    List<IncomeExpenseMonth> incomeExpenseList = [];
     if (allPaymentsResult.isSuccess) {
       final now = DateTime.now();
       final allPayments = allPaymentsResult.successValue;
@@ -300,6 +327,36 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsState> {
         startDate: startDate,
         endDate: endDate,
       );
+
+      // Total income for period
+      totalIncome = allPayments
+          .where((p) {
+            if (p.isDeleted) return false;
+            final date = AppDateUtils.parseIso(p.date);
+            return p.isIncome && date != null && !date.isBefore(startDate) && !date.isAfter(endDate);
+          })
+          .fold(0.0, (sum, p) => sum + p.amount);
+
+      // Build monthly income vs expense data (last 6 months)
+      final monthlyMap = <String, ({double income, double expense})>{};
+      for (final p in allPayments) {
+        if (p.isDeleted) continue;
+        final date = AppDateUtils.parseIso(p.date);
+        if (date == null) continue;
+        final key = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+        final current = monthlyMap[key] ?? (income: 0.0, expense: 0.0);
+        if (p.isIncome) {
+          monthlyMap[key] = (income: current.income + p.amount, expense: current.expense);
+        } else {
+          monthlyMap[key] = (income: current.income, expense: current.expense + p.amount);
+        }
+      }
+      final sortedKeys = monthlyMap.keys.toList()..sort();
+      final last6 = sortedKeys.length > 6 ? sortedKeys.sublist(sortedKeys.length - 6) : sortedKeys;
+      incomeExpenseList = last6.map((key) {
+        final data = monthlyMap[key]!;
+        return IncomeExpenseMonth(month: key, income: data.income, expense: data.expense);
+      }).toList();
     }
 
     state = state.copyWith(
@@ -310,6 +367,8 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsState> {
       recurringCategoryData: recurringCategoryList,
       scheduledFutureTotal: scheduledFutureTotal,
       upcomingRecurringCount: upcomingRecurringCount,
+      incomeExpenseData: incomeExpenseList,
+      totalIncome: totalIncome,
       isLoading: false,
       errorMessage: analyticsResult.isFailure
           ? analyticsResult.failureValue.message
